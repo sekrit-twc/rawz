@@ -1,0 +1,236 @@
+#include <algorithm>
+#include <cctype>
+#include <climits>
+#include <cstdint>
+#include <stdexcept>
+#include <string>
+#include <utility>
+#include "rawz.h"
+#include "vsxx_pluginmain.h"
+
+using namespace std::string_literals;
+using namespace vsxx;
+
+namespace {
+
+struct RawzIOStreamClose {
+	void operator()(rawz_io_stream *ptr) { rawz_io_stream_close(ptr); }
+};
+
+struct RawzVideoStreamFree {
+	void operator()(rawz_video_stream *ptr) { rawz_video_stream_free(ptr); }
+};
+
+[[noreturn]] void rawz_rethrow_exception()
+{
+	throw std::runtime_error{ rawz_get_last_error() };
+}
+
+typedef std::unique_ptr<rawz_io_stream, RawzIOStreamClose> rawz_io_stream_ptr;
+typedef std::unique_ptr<rawz_video_stream, RawzVideoStreamFree> rawz_video_stream_ptr;
+
+int check_uint(unsigned x)
+{
+	if (x > static_cast<unsigned>(INT_MAX))
+		throw std::runtime_error{ "integer out of bounds" };
+	return x;
+}
+
+std::pair<int64_t, int64_t> normalize_rational(int64_t num, int64_t den)
+{
+	vs_normalizeRational(&num, &den);
+	if (den < 0) {
+		num = num == INT64_MIN ? INT64_MAX : -num;
+		den = den == INT64_MIN ? INT64_MAX : -den;
+	}
+	return{ num, den };
+}
+
+} // namespace
+
+
+class SourceFilter : public FilterBase {
+	enum class Y4MMode {
+		AUTO = 0,
+		FORCE = 1,
+		DISABLE = 2,
+	};
+
+	rawz_video_stream_ptr m_stream;
+	VideoFrame m_prop_holder;
+	VSVideoInfo m_vi;
+
+	void init_format(const rawz_format &formatz, bool rgb, const VapourCore &core)
+	{
+		VSVideoInfo vi{};
+		VSColorFamily cm = cmGray;
+		VSSampleType st = formatz.floating_point ? stFloat : stInteger;
+		int subsample_w = 0;
+		int subsample_h = 0;
+
+		vi.width = check_uint(formatz.width);
+		vi.height = check_uint(formatz.height);
+
+		if (formatz.planes_mask & 0x6) {
+			subsample_w = check_uint(formatz.subsample_w);
+			subsample_h = check_uint(formatz.subsample_h);
+			if (subsample_w > 2 || subsample_h > 2)
+				throw std::runtime_error{ "subsampling >4x not supported" };
+
+			if (vi.width & ((1 << subsample_w) - 1)) {
+				unsigned subsample_w_ratio = 1 << subsample_w;
+				unsigned padded_w = (static_cast<unsigned>(vi.width) + (subsample_w_ratio - 1)) &
+					~static_cast<unsigned>(subsample_w_ratio - 1);
+				vi.width = check_uint(padded_w);
+			}
+			if (vi.height & ((1 << subsample_h) - 1)) {
+				unsigned subsample_h_ratio = 1 << subsample_h;
+				unsigned padded_h = (static_cast<unsigned>(vi.height) + (subsample_h_ratio - 1)) &
+					~static_cast<unsigned>(subsample_h_ratio - 1);
+				vi.height = check_uint(padded_h);
+			}
+
+			cm = rgb ? cmRGB : cmYUV;
+		} else {
+			cm = cmGray;
+		}
+
+		vi.format = core.register_format(cm, st, formatz.bits_per_sample, subsample_w, subsample_h);
+		vi.fpsNum = 25;
+		vi.fpsDen = 1;
+		vi.numFrames = int64ToIntS(rawz_video_stream_framecount(m_stream.get()));
+		m_vi = vi;
+
+		if (formatz.planes_mask & (1 << 3))
+			(void)0; // TODO: Alpha
+	}
+
+	void init_metadata(const rawz_metadata &metadata, const VapourCore &core)
+	{
+		m_prop_holder = core.new_video_frame(*core.format_preset(pfGray8), 1, 1);
+		PropertyMapRef props = m_prop_holder.frame_props();
+
+		if (metadata.sarnum && metadata.sarden) {
+			auto val = normalize_rational(metadata.sarnum, metadata.sarden);
+			if (val.first > 0) {
+				props.set_prop("_SARNum", val.first);
+				props.set_prop("_SARDen", val.second);
+			}
+		}
+
+		if (metadata.fpsnum && metadata.fpsden) {
+			auto val = normalize_rational(metadata.fpsnum, metadata.fpsden);
+			if (val.first > 0) {
+				m_vi.fpsNum = val.first;
+				m_vi.fpsDen = val.second;
+			}
+		}
+
+		if (metadata.fullrange == 0)
+			props.set_prop("_ColorRange", 1);
+		else if (metadata.fullrange == 1)
+			props.set_prop("_ColorRange", 0);
+
+		if (metadata.fieldorder >= 0 && metadata.fieldorder <= 2)
+			props.set_prop("_FieldBased", metadata.fieldorder);
+
+		if (metadata.chromaloc >= 0 && metadata.chromaloc <= 5)
+			props.set_prop("_ChromaLocation", metadata.chromaloc);
+	}
+public:
+	SourceFilter(void * = nullptr) : m_vi() {}
+
+	const char *get_name(int) noexcept override
+	{
+		return "Source";
+	}
+
+	std::pair<VSFilterMode, int> init(const ConstPropertyMap &in, const PropertyMap &out, const VapourCore &core) override
+	{
+		std::string path = in.get_prop<std::string>("source");
+		Y4MMode y4m_mode = static_cast<Y4MMode>(in.get_prop<int>("y4m", map::Ignore{}));
+		bool y4m = y4m_mode == Y4MMode::FORCE;
+
+		// Check for Y4M file.
+		if (y4m_mode == Y4MMode::AUTO) {
+			size_t idx = path.rfind('.');
+			std::string ext = idx == std::string::npos ? ""s : path.substr(idx);
+			std::transform(ext.begin(), ext.end(), ext.begin(), std::tolower);
+			if (ext == ".y4m")
+				y4m = true;
+		}
+
+		rawz_format formatz;
+		bool rgb = false;
+
+		rawz_format_default(&formatz);
+
+		if (y4m) {
+			formatz.mode = RAWZ_Y4M;
+		} else {
+			formatz.mode = RAWZ_PLANAR;
+			throw std::runtime_error{ "not implemented" };
+		}
+
+		rawz_io_stream_ptr io{ rawz_io_open_file(path.c_str(), 1) };
+		if (!io)
+			rawz_rethrow_exception();
+
+		m_stream.reset(rawz_video_stream_create(io.release(), &formatz));
+		if (!m_stream)
+			rawz_rethrow_exception();
+
+		init_format(formatz, rgb, core);
+		if (!isConstantFormat(&m_vi))
+			throw std::runtime_error{ "unsupported or incomplete format" };
+
+		rawz_metadata metadata{};
+		if (y4m) {
+			rawz_video_stream_metadata(m_stream.get(), &metadata);
+		} else {
+			metadata.fullrange = -1;
+			metadata.fieldorder = -1;
+			metadata.chromaloc = -1;
+			throw std::runtime_error{ "not implemented" };
+		}
+		init_metadata(metadata, core);
+
+		return{ fmUnordered, 0 };
+	}
+
+	std::pair<const VSVideoInfo *, size_t> get_video_info() noexcept override
+	{
+		return{ &m_vi, 1 };
+	}
+
+	ConstVideoFrame get_frame_initial(int n, const VapourCore &core, VSFrameContext *frame_ctx) override
+	{
+		return get_frame(n, core, frame_ctx);
+	}
+
+	ConstVideoFrame get_frame(int n, const VapourCore &core, VSFrameContext *frame_ctx) override
+	{
+		VideoFrame frame = core.new_video_frame(*m_vi.format, m_vi.width, m_vi.height, m_prop_holder);
+		void *planes[4] = {};
+		ptrdiff_t stride[4] = {};
+
+		for (int p = 0; p < m_vi.format->numPlanes; ++p) {
+			planes[p] = frame.write_ptr(p);
+			stride[p] = frame.stride(p);
+		}
+		// TODO: Alpha
+
+		if (rawz_video_stream_read(m_stream.get(), n, planes, stride))
+			rawz_rethrow_exception();
+
+		return frame;
+	}
+};
+
+
+const PluginInfo g_plugin_info = {
+	"who.you.gonna.call.when.they.come.for.you", "rawz", "VapourSynth Raw Source", {
+		{ &FilterBase::filter_create<SourceFilter>, "Source",
+			"source:data;y4m:int:opt;" }
+	}
+};
