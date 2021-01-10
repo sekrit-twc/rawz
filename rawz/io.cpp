@@ -91,6 +91,7 @@ uint64_t file_length(std::FILE *file)
 
 class FileIOStream : public IOStream {
 	unique_file m_file;
+	uint64_t m_offset;
 	uint64_t m_length;
 	mutable uint64_t m_where;
 	bool m_seekable;
@@ -99,21 +100,29 @@ class FileIOStream : public IOStream {
 	void do_tell() const
 	{
 		int64_t pos = ftello(m_file.get());
-		if (pos < 0)
+		if (pos < 0 || static_cast<uint64_t>(pos) < m_offset)
 			throw_system_error();
 		m_where = pos;
 		m_valid_pos = true;
 	}
 public:
-	FileIOStream(unique_file file, bool seekable) :
+	FileIOStream(unique_file file, bool seekable, uint64_t offset) :
 		m_file{ std::move(file) },
+		m_offset{},
 		m_length{},
 		m_where{},
 		m_seekable{ seekable },
 		m_valid_pos{}
 	{
 		if (seekable) {
+			m_offset = offset;
 			m_length = file_length(m_file.get());
+
+			if (m_offset > m_length)
+				throw std::runtime_error{ "offset past end of file" };
+			if (fseeko(m_file.get(), m_offset, SEEK_SET))
+				throw std::runtime_error{ "seek error" };
+
 			do_tell();
 		}
 	}
@@ -154,34 +163,59 @@ public:
 		static_assert(sizeof(offset) == sizeof(m_where), "");
 		static_assert(~int64_t(0) == int64_t(-1), "twos complement");
 
-		if (fseeko(m_file.get(), offset, whence)) {
-			m_valid_pos = false;
-			throw_system_error();
+		auto throw_error = []() { throw std::runtime_error{ "offset out of bounds" }; };
+
+		if (!m_valid_pos) {
+			do_tell();
+			if (!m_valid_pos)
+				throw_error();
 		}
 
+		uint64_t abs_offset = m_where;
+
+		// Rebase the offset.
 		switch (whence) {
 		case seek_set:
-			m_where = offset;
+			if (offset < 0)
+				throw_error();
+			abs_offset = m_offset + static_cast<uint64_t>(offset);
 			break;
 		case seek_end:
-			m_where = m_length + offset;
+			if (offset > 0)
+				throw_error();
+			abs_offset = m_length + static_cast<uint64_t>(offset);
 			break;
 		case seek_cur:
-			m_where += offset;
+			if (offset < 0 && m_where <= static_cast<uint64_t>(INT64_MAX) && offset < -static_cast<int64_t>(m_where))
+				throw_error();
+			if (offset >= 0 && static_cast<uint64_t>(offset) > m_length - m_offset)
+				throw_error();
+			abs_offset = m_where + static_cast<uint64_t>(offset);
 			break;
 		default:
 			break;
 		}
+
+		if (abs_offset > static_cast<uint64_t>(INT64_MAX))
+			throw_error();
+
+		if (fseeko(m_file.get(), abs_offset, SEEK_SET)) {
+			m_valid_pos = false;
+			throw_system_error();
+		}
+		m_where = abs_offset;
 	}
 
 	uint64_t tell() const override
 	{
 		if (!m_valid_pos)
 			do_tell();
-		return m_where;
+		if (m_where < m_offset)
+			throw std::runtime_error{ "invalid file position" };
+		return m_where - m_offset;
 	}
 
-	uint64_t length() const override { return m_length; }
+	uint64_t length() const override { return m_length - m_offset; }
 };
 
 
@@ -254,14 +288,14 @@ public:
 } // namespace
 
 
-std::unique_ptr<IOStream> create_stdio_stream(const char *path, bool seekable)
+std::unique_ptr<IOStream> create_stdio_stream(const char *path, bool seekable, uint64_t offset)
 {
-	return std::make_unique<FileIOStream>(unicode_open(path, WSTR("rb")), seekable);
+	return std::make_unique<FileIOStream>(unicode_open(path, WSTR("rb")), seekable, offset);
 }
 
-std::unique_ptr<IOStream> create_stdio_stream_fd(int fd, bool seekable)
+std::unique_ptr<IOStream> create_stdio_stream_fd(int fd, bool seekable, uint64_t offset)
 {
-	return std::make_unique<FileIOStream>(unique_file{ fdopen(fd, "rb") }, seekable);
+	return std::make_unique<FileIOStream>(unique_file{ fdopen(fd, "rb") }, seekable, offset);
 }
 
 std::unique_ptr<IOStream> create_user_stream(rawz_io_user_read read, rawz_io_user_seek seek, rawz_io_user_tell tell, rawz_io_user_close close,

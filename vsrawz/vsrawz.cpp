@@ -213,9 +213,15 @@ public:
 			formatz.bits_per_sample = format->bitsPerSample;
 			formatz.floating_point = format->sampleType == stFloat;
 			rgb = format->colorFamily == cmRGB;
+
+			formatz.alignment = in.get_prop<int>("alignment", map::Ignore{});
+			if (formatz.alignment > 12)
+				throw std::runtime_error{ "too much alignment" };
 		}
 
-		rawz_io_stream_ptr io{ rawz_io_open_file(path.c_str(), 1) };
+		int64_t offset = in.get_prop<int64_t>("offset", map::Ignore{});
+		offset = std::max(offset, static_cast<int64_t>(0));
+		rawz_io_stream_ptr io{ rawz_io_open_file(path.c_str(), 1, offset) };
 		if (!io)
 			rawz_rethrow_exception();
 
@@ -277,7 +283,8 @@ public:
 const PluginInfo g_plugin_info = {
 	"who.you.gonna.call.when.they.come.for.you", "rawz", "VapourSynth Raw Source", {
 		{ &FilterBase::filter_create<SourceFilter>, "Source",
-			"source:data;width:int:opt;height:int:opt;format:int:opt;packing:data:opt;y4m:int:opt;"
+			"source:data;width:int:opt;height:int:opt;format:int:opt;"
+			"packing:data:opt;offset:int:opt;alignment:int:opt;y4m:int:opt;"
 			"fpsnum:int:opt;fpsden:int:opt;sarnum:int:opt;sarden:int:opt;" }
 	}
 };

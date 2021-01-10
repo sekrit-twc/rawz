@@ -315,6 +315,9 @@ public:
 		m_packet_size{},
 		m_frameno{}
 	{
+		if (m_io->seekable())
+			m_io->seek(0, IOStream::seek_set);
+
 		read_header();
 
 		if (!is_valid_format(m_format))

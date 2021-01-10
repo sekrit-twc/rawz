@@ -53,9 +53,9 @@ typedef int (*rawz_io_user_seek)(int64_t offset, int whence, void *user);
 typedef int64_t (*rawz_io_user_tell)(void *user);
 typedef void (*rawz_io_user_close)(void *user);
 
-rawz_io_stream *rawz_io_open_file(const char *path, int seekable);
+rawz_io_stream *rawz_io_open_file(const char *path, int seekable, uint64_t offset);
 
-rawz_io_stream *rawz_io_open_fd(int fd, int seekable);
+rawz_io_stream *rawz_io_open_fd(int fd, int seekable, uint64_t offset);
 
 rawz_io_stream *rawz_io_wrap_user(rawz_io_user_read read, rawz_io_user_seek seek, rawz_io_user_tell tell, rawz_io_user_close close,
                                   int64_t length, void *user);

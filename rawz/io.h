@@ -49,9 +49,9 @@ public:
 	T read() { T t; read(t); return t; }
 };
 
-std::unique_ptr<IOStream> create_stdio_stream(const char *path, bool seekable);
+std::unique_ptr<IOStream> create_stdio_stream(const char *path, bool seekable, uint64_t offset);
 
-std::unique_ptr<IOStream> create_stdio_stream_fd(int fd, bool seekable);
+std::unique_ptr<IOStream> create_stdio_stream_fd(int fd, bool seekable, uint64_t offset);
 
 std::unique_ptr<IOStream> create_user_stream(rawz_io_user_read read, rawz_io_user_seek seek, rawz_io_user_tell tell, rawz_io_user_close close, int64_t length, void *user);
 

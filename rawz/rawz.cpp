@@ -41,17 +41,17 @@ void rawz_clear_last_error()
 	g_last_error.clear();
 }
 
-rawz_io_stream *rawz_io_open_file(const char *path, int seekable) try
+rawz_io_stream *rawz_io_open_file(const char *path, int seekable, uint64_t offset) try
 {
-	return rawz::create_stdio_stream(path, !!seekable).release();
+	return rawz::create_stdio_stream(path, !!seekable, offset).release();
 } catch (...) {
 	record_exception();
 	return nullptr;
 }
 
-rawz_io_stream *rawz_io_open_fd(int fd, int seekable) try
+rawz_io_stream *rawz_io_open_fd(int fd, int seekable, uint64_t offset) try
 {
-	return rawz::create_stdio_stream_fd(fd, !!seekable).release();
+	return rawz::create_stdio_stream_fd(fd, !!seekable, offset).release();
 } catch (...) {
 	record_exception();
 	return nullptr;
