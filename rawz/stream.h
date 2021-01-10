@@ -40,10 +40,7 @@ void blit_plane(IOStream *io, unsigned width, unsigned height, unsigned bytes_pe
 void blit_planar_frame(IOStream *io, const rawz_format &format, void * const planes[4], const ptrdiff_t stride[4]);
 
 
-inline std::unique_ptr<VideoStream> create_planar_stream(std::unique_ptr<IOStream> io, const rawz_format *format)
-{
-	throw 1;
-}
+std::unique_ptr<VideoStream> create_planar_stream(std::unique_ptr<IOStream> io, const rawz_format *format);
 
 std::unique_ptr<VideoStream> create_y4m_stream(std::unique_ptr<IOStream> io, rawz_format *format);
 

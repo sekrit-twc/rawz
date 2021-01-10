@@ -50,5 +50,8 @@
     <ClCompile Include="..\..\rawz\stream.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\rawz\planar.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

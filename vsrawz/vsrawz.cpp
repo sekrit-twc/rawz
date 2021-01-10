@@ -29,6 +29,14 @@ struct RawzVideoStreamFree {
 typedef std::unique_ptr<rawz_io_stream, RawzIOStreamClose> rawz_io_stream_ptr;
 typedef std::unique_ptr<rawz_video_stream, RawzVideoStreamFree> rawz_video_stream_ptr;
 
+
+unsigned int64_to_uint(int64_t x)
+{
+	if (x < 0 || x > static_cast<int64_t>(UINT_MAX))
+		throw std::runtime_error{ "integer out of bounds" };
+	return static_cast<unsigned>(x);
+}
+
 int check_uint(unsigned x)
 {
 	if (x > static_cast<unsigned>(INT_MAX))
@@ -169,7 +177,20 @@ public:
 			formatz.mode = RAWZ_Y4M;
 		} else {
 			formatz.mode = RAWZ_PLANAR;
-			throw std::runtime_error{ "not implemented" };
+			formatz.width = int64_to_uint(in.get_prop<int64_t>("width"));
+			formatz.height = int64_to_uint(in.get_prop<int64_t>("height"));
+
+			const VSFormat *format = core.format_preset(static_cast<VSPresetFormat>(in.get_prop<int>("format")));
+			if (!format)
+				throw std::runtime_error{ "unregistered format" };
+
+			formatz.planes_mask = format->numPlanes == 3 ? 0x7 : 0x1;
+			formatz.subsample_w = format->subSamplingW;
+			formatz.subsample_h = format->subSamplingH;
+			formatz.bytes_per_sample = format->bytesPerSample;
+			formatz.bits_per_sample = format->bitsPerSample;
+			formatz.floating_point = format->sampleType == stFloat;
+			rgb = format->colorFamily == cmRGB;
 		}
 
 		rawz_io_stream_ptr io{ rawz_io_open_file(path.c_str(), 1) };
@@ -188,10 +209,13 @@ public:
 		if (y4m) {
 			rawz_video_stream_metadata(m_stream.get(), &metadata);
 		} else {
+			metadata.fpsnum = in.get_prop<int64_t>("fpsnum", map::Ignore{});
+			metadata.fpsden = in.get_prop<int64_t>("fpsden", map::Ignore{});
+			metadata.sarnum = in.get_prop<int64_t>("sarnum", map::Ignore{});
+			metadata.sarden = in.get_prop<int64_t>("sarden", map::Ignore{});
 			metadata.fullrange = -1;
 			metadata.fieldorder = -1;
 			metadata.chromaloc = -1;
-			throw std::runtime_error{ "not implemented" };
 		}
 		init_metadata(metadata, core);
 
@@ -231,6 +255,7 @@ public:
 const PluginInfo g_plugin_info = {
 	"who.you.gonna.call.when.they.come.for.you", "rawz", "VapourSynth Raw Source", {
 		{ &FilterBase::filter_create<SourceFilter>, "Source",
-			"source:data;y4m:int:opt;" }
+			"source:data;width:int:opt;height:int:opt;format:int:opt;y4m:int:opt;"
+			"fpsnum:int:opt;fpsden:int:opt;sarnum:int:opt;sarden:int:opt;" }
 	}
 };
