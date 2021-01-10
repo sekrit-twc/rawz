@@ -150,6 +150,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\libp2p\v210.cpp" />
+    <ClCompile Include="..\..\rawz\interleaved.cpp" />
     <ClCompile Include="..\..\rawz\io.cpp" />
     <ClCompile Include="..\..\rawz\planar.cpp" />
     <ClCompile Include="..\..\rawz\rawz.cpp" />

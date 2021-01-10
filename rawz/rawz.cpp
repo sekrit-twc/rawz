@@ -80,6 +80,16 @@ rawz_video_stream *rawz_video_stream_create(rawz_io_stream *io, rawz_format *for
 		return rawz::create_planar_stream(std::move(io_ptr), format).release();
 	case RAWZ_Y4M:
 		return rawz::create_y4m_stream(std::move(io_ptr), format).release();
+	case RAWZ_NV:
+		return rawz::create_nv_stream(std::move(io_ptr), format).release();
+	case RAWZ_ARGB:
+	case RAWZ_RGBA:
+	case RAWZ_RGB:
+	case RAWZ_RGB30:
+	case RAWZ_YUYV:
+	case RAWZ_UYVY:
+	case RAWZ_V210:
+		return rawz::create_interleaved_stream(std::move(io_ptr), format).release();
 	default:
 		throw std::runtime_error{ "unsupported packing mode" };
 	}

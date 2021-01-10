@@ -10,7 +10,7 @@ typedef enum rawz_packing_mode {
 	RAWZ_ARGB,
 	RAWZ_RGBA,
 	RAWZ_RGB,
-	RAWZ_R10G10B10A2,
+	RAWZ_RGB30,
 	RAWZ_NV,
 	RAWZ_YUYV,
 	RAWZ_UYVY,

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include "rawz.h"
 #include "vsxx_pluginmain.h"
@@ -53,6 +54,18 @@ std::pair<int64_t, int64_t> normalize_rational(int64_t num, int64_t den)
 	}
 	return{ num, den };
 }
+
+
+const std::unordered_map<std::string, rawz_packing_mode> g_packing_mode_table{
+	{ "argb",  RAWZ_ARGB },
+	{ "rgba",  RAWZ_RGBA },
+	{ "rgb",   RAWZ_RGB },
+	{ "rgb30", RAWZ_RGB30 },
+	{ "nv",    RAWZ_NV },
+	{ "yuyv",  RAWZ_YUYV },
+	{ "uyvy",  RAWZ_UYVY },
+	{ "v210",  RAWZ_V210 },
+};
 
 } // namespace
 
@@ -176,7 +189,16 @@ public:
 		if (y4m) {
 			formatz.mode = RAWZ_Y4M;
 		} else {
-			formatz.mode = RAWZ_PLANAR;
+			if (in.contains("packing")) {
+				std::string key = in.get_prop<std::string>("packing");
+				auto it = g_packing_mode_table.find(key);
+				if (it == g_packing_mode_table.end())
+					throw std::runtime_error{ "unknown packing mode: " + key };
+				formatz.mode = it->second;
+			} else {
+				formatz.mode = RAWZ_PLANAR;
+			}
+
 			formatz.width = int64_to_uint(in.get_prop<int64_t>("width"));
 			formatz.height = int64_to_uint(in.get_prop<int64_t>("height"));
 
@@ -255,7 +277,7 @@ public:
 const PluginInfo g_plugin_info = {
 	"who.you.gonna.call.when.they.come.for.you", "rawz", "VapourSynth Raw Source", {
 		{ &FilterBase::filter_create<SourceFilter>, "Source",
-			"source:data;width:int:opt;height:int:opt;format:int:opt;y4m:int:opt;"
+			"source:data;width:int:opt;height:int:opt;format:int:opt;packing:data:opt;y4m:int:opt;"
 			"fpsnum:int:opt;fpsden:int:opt;sarnum:int:opt;sarden:int:opt;" }
 	}
 };

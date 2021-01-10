@@ -42,6 +42,13 @@ void blit_planar_frame(IOStream *io, const rawz_format &format, void * const pla
 
 std::unique_ptr<VideoStream> create_planar_stream(std::unique_ptr<IOStream> io, const rawz_format *format);
 
+inline std::unique_ptr<VideoStream> create_nv_stream(std::unique_ptr<IOStream> io, rawz_format *format)
+{
+	throw 1;
+}
+
+std::unique_ptr<VideoStream> create_interleaved_stream(std::unique_ptr<IOStream> io, rawz_format *format);
+
 std::unique_ptr<VideoStream> create_y4m_stream(std::unique_ptr<IOStream> io, rawz_format *format);
 
 } // namespace rawz
