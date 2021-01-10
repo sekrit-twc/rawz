@@ -144,6 +144,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\..\libp2p\p2p.h" />
+    <ClInclude Include="..\..\rawz\common.h" />
     <ClInclude Include="..\..\rawz\io.h" />
     <ClInclude Include="..\..\rawz\rawz.h" />
     <ClInclude Include="..\..\rawz\stream.h" />

@@ -108,7 +108,7 @@ void rawz_video_stream_metadata(const rawz_video_stream *ptr, rawz_metadata *met
 	*metadata = static_cast<const rawz::VideoStream *>(ptr)->metadata();
 }
 
-int rawz_video_stream_read(rawz_video_stream *ptr, int n, void * const planes[4], const ptrdiff_t stride[4]) try
+int rawz_video_stream_read(rawz_video_stream *ptr, int64_t n, void * const planes[4], const ptrdiff_t stride[4]) try
 {
 	static_cast<rawz::VideoStream *>(ptr)->read(n, planes, stride);
 	return 0;

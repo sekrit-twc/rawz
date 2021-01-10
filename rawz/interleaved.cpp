@@ -2,6 +2,7 @@
 #include <stdexcept>
 #include <vector>
 #include <p2p.h>
+#include "common.h"
 #include "io.h"
 #include "stream.h"
 
@@ -82,8 +83,7 @@ class InterleavedVideoStream : public VideoStream {
 			break;
 		}
 
-		size_t alignment_factor = static_cast<size_t>(1) << m_format.alignment;
-		m_row_size = (m_row_size + (alignment_factor - 1)) & ~(alignment_factor - 1);
+		m_row_size = ceil_aligned(m_row_size, m_format.alignment);
 		m_packet_size = static_cast<uint64_t>(m_row_size) * m_format.height;
 	}
 
@@ -122,16 +122,13 @@ public:
 		m_unpack{},
 		m_row_size{},
 		m_packet_size{},
-		m_frameno{}
+		m_frameno{ -1 }
 	{
 		init_format();
 		if (!is_valid_format(format))
 			throw std::runtime_error{ "invalid format" };
 
 		init_unpack();
-
-		if (m_io->seekable())
-			m_io->seek(0, IOStream::seek_set);
 	}
 
 	int64_t framecount() const noexcept
@@ -141,31 +138,25 @@ public:
 
 	rawz_metadata metadata() const noexcept { return default_metadata(); }
 
-	void read(int n, void * const planes[4], const ptrdiff_t stride[4]) try
+	void read(int64_t n, void * const planes[4], const ptrdiff_t stride[4]) try
 	{
-		if (m_frameno == INT64_MAX)
-			throw IOStream::eof{};
+		seek_to_frame(m_io.get(), m_frameno, n, m_packet_size);
 
-		if (n != m_frameno) {
-			uint64_t pos = m_packet_size * static_cast<uint64_t>(n);
-			if (pos > static_cast<uint64_t>(INT64_MAX))
-				throw std::runtime_error{ "invalid file position" };
-
-			m_io->seek(pos, IOStream::seek_set);
-		}
-
-		void *xplanes[4] = { planes[0], planes[1], planes[2], planes[3] };
+		void *plane_ptrs[4] = { planes[0], planes[1], planes[2], planes[3] };
 		std::vector<uint8_t> buffer(m_row_size);
 		unsigned height = m_format.height;
 		unsigned vstep = 1U << m_format.subsample_h;
 
 		for (unsigned i = 0; i < height; i += vstep) {
 			m_io->read(buffer.data(), buffer.size());
-			m_unpack(buffer.data(), xplanes, 0, m_format.width);
+			m_unpack(buffer.data(), plane_ptrs, 0, m_format.width);
 
 			for (unsigned p = 0; p < 4; ++p) {
-				if (xplanes[p])
-					xplanes[p] = static_cast<uint8_t *>(xplanes[p]) + stride[p] * static_cast<ptrdiff_t>(vstep);
+				if (!plane_ptrs[p])
+					continue;
+
+				unsigned plane_vstep = is_chroma_plane(p) ? 1 : vstep;
+				plane_ptrs[p] = advance_ptr(plane_ptrs[p], stride[p] * static_cast<ptrdiff_t>(plane_vstep));
 			}
 		}
 

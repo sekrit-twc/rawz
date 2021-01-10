@@ -313,7 +313,7 @@ public:
 		m_metadata(default_metadata()),
 		m_offset{},
 		m_packet_size{},
-		m_frameno{}
+		m_frameno{ -1 }
 	{
 		if (m_io->seekable())
 			m_io->seek(0, IOStream::seek_set);
@@ -325,6 +325,7 @@ public:
 
 		m_offset = m_io->tell();
 		m_packet_size = std::strlen("FRAME\n") + planar_frame_size(m_format);
+		m_frameno = 0;
 	}
 
 	int64_t framecount() const noexcept override
@@ -337,18 +338,9 @@ public:
 
 	rawz_metadata metadata() const noexcept override { return m_metadata; }
 
-	void read(int n, void * const planes[4], const ptrdiff_t stride[4]) override try
+	void read(int64_t n, void * const planes[4], const ptrdiff_t stride[4]) override try
 	{
-		if (m_frameno == INT64_MAX)
-			throw IOStream::eof{};
-
-		if (n != m_frameno) {
-			uint64_t pos = m_offset + m_packet_size * static_cast<uint64_t>(n);
-			if (pos > static_cast<uint64_t>(INT64_MAX))
-				throw std::runtime_error{ "invalid file position" };
-
-			m_io->seek(pos, IOStream::seek_set);
-		}
+		seek_to_frame(m_io.get(), m_frameno, n, m_packet_size, m_offset);
 
 		std::array<char, sizeof("FRAME\n") - 1> header{};
 		m_io->read(header);

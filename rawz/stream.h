@@ -25,11 +25,13 @@ public:
 
 	virtual rawz_metadata metadata() const noexcept = 0;
 
-	virtual void read(int n, void * const planes[4], const ptrdiff_t stride[4]) = 0;
+	virtual void read(int64_t n, void * const planes[4], const ptrdiff_t stride[4]) = 0;
 };
 
 
 rawz_metadata default_metadata();
+
+constexpr bool is_chroma_plane(unsigned p) { return p == 1 || p == 2; }
 
 bool is_valid_format(const rawz_format &format);
 

@@ -49,6 +49,11 @@ public:
 	T read() { T t; read(t); return t; }
 };
 
+
+// Helper function. Performs a seek if the stream is not positioned at frame n.
+void seek_to_frame(IOStream *io, int64_t &cur_frame, int64_t n, uint64_t packet_size, uint64_t base_offset=0);
+
+
 std::unique_ptr<IOStream> create_stdio_stream(const char *path, bool seekable, uint64_t offset);
 
 std::unique_ptr<IOStream> create_stdio_stream_fd(int fd, bool seekable, uint64_t offset);

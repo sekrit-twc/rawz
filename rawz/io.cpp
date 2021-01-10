@@ -288,6 +288,26 @@ public:
 } // namespace
 
 
+void seek_to_frame(IOStream *io, int64_t &cur_frame, int64_t n, uint64_t packet_size, uint64_t base_offset) try
+{
+	if (cur_frame == n)
+		return;
+	if (cur_frame == INT64_MAX)
+		throw IOStream::eof{};
+	if (n < 0)
+		throw IOStream::eof{};
+	if (static_cast<uint64_t>(n) > (static_cast<uint64_t>(INT64_MAX) - base_offset) / packet_size)
+		throw IOStream::eof{};
+
+	uint64_t where = base_offset + static_cast<uint64_t>(n) * packet_size;
+	io->seek(where, IOStream::seek_set);
+	cur_frame = n;
+} catch (...) {
+	cur_frame = -1;
+	throw;
+}
+
+
 std::unique_ptr<IOStream> create_stdio_stream(const char *path, bool seekable, uint64_t offset)
 {
 	return std::make_unique<FileIOStream>(unicode_open(path, WSTR("rb")), seekable, offset);

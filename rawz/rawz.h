@@ -72,7 +72,7 @@ int64_t rawz_video_stream_framecount(const rawz_video_stream *ptr);
 
 void rawz_video_stream_metadata(const rawz_video_stream *ptr, rawz_metadata *metadata);
 
-int rawz_video_stream_read(rawz_video_stream *ptr, int n, void * const planes[4], const ptrdiff_t stride[4]);
+int rawz_video_stream_read(rawz_video_stream *ptr, int64_t n, void * const planes[4], const ptrdiff_t stride[4]);
 
 void rawz_video_stream_free(rawz_video_stream *ptr);
 
