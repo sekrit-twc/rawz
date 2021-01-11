@@ -2,6 +2,7 @@
 #include <stdexcept>
 #include <vector>
 #include <p2p.h>
+#include "checked_int.h"
 #include "common.h"
 #include "io.h"
 #include "stream.h"
@@ -23,7 +24,8 @@ size_t v210_rowsize(unsigned width)
 {
 	// 6 pixels per 4 DWORDs.
 	unsigned width_div6 = width / 6 + ((width % 6) ? 1 : 0);
-	return static_cast<size_t>(width_div6) * 16;
+	checked_size_t sz = checked_size_t{ width_div6 } * 16;
+	return sz.get();
 }
 
 
@@ -31,7 +33,7 @@ class InterleavedVideoStream : public VideoStream {
 	std::unique_ptr<IOStream> m_io;
 	rawz_format m_format;
 	unpack_func m_unpack;
-	size_t m_row_size;
+	size_t m_rowsize;
 	uint64_t m_packet_size;
 	int64_t m_frameno;
 
@@ -61,30 +63,32 @@ class InterleavedVideoStream : public VideoStream {
 		if (m_format.mode == RAWZ_V210)
 			m_format.alignment = std::max(m_format.alignment, 7U); // 128-byte aligned
 
+		checked_size_t rowsize;
 		switch (m_format.mode) {
 		case RAWZ_ARGB:
 		case RAWZ_RGBA:
-			m_row_size = static_cast<size_t>(m_format.width) * m_format.bytes_per_sample * 4;
+			rowsize = checked_size_t{ m_format.width } * m_format.bytes_per_sample * 4U;
 			break;
 		case RAWZ_RGB:
-			m_row_size = static_cast<size_t>(m_format.width) * m_format.bytes_per_sample * 3;
+			rowsize = checked_size_t{ m_format.width } * m_format.bytes_per_sample * 3U;
 			break;
 		case RAWZ_RGB30:
-			m_row_size = static_cast<size_t>(m_format.width) * 4;
+			rowsize = checked_size_t{ m_format.width } * 4U;
 			break;
 		case RAWZ_YUYV:
 		case RAWZ_UYVY:
-			m_row_size = static_cast<size_t>(m_format.width) * m_format.bytes_per_sample * 2;
+			rowsize = checked_size_t{ m_format.width } * m_format.bytes_per_sample * 2U;
 			break;
 		case RAWZ_V210:
-			m_row_size = v210_rowsize(m_format.width);
+			rowsize = v210_rowsize(m_format.width);
 			break;
 		default:
 			break;
 		}
+		rowsize = ceil_aligned(rowsize, m_format.alignment);
 
-		m_row_size = ceil_aligned(m_row_size, m_format.alignment);
-		m_packet_size = static_cast<uint64_t>(m_row_size) * m_format.height;
+		m_rowsize = rowsize.get();
+		m_packet_size = (rowsize * m_format.height).get();
 	}
 
 	void init_unpack()
@@ -120,7 +124,7 @@ public:
 		m_io{ std::move(io) },
 		m_format(format),
 		m_unpack{},
-		m_row_size{},
+		m_rowsize{},
 		m_packet_size{},
 		m_frameno{ -1 }
 	{
@@ -143,7 +147,7 @@ public:
 		seek_to_frame(m_io.get(), m_frameno, n, m_packet_size);
 
 		void *plane_ptrs[4] = { planes[0], planes[1], planes[2], planes[3] };
-		std::vector<uint8_t> buffer(m_row_size);
+		std::vector<uint8_t> buffer(m_rowsize);
 		unsigned height = m_format.height;
 		unsigned vstep = 1U << m_format.subsample_h;
 

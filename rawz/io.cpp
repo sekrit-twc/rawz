@@ -160,39 +160,40 @@ public:
 				throw_error();
 		}
 
-		uint64_t abs_offset = m_where;
-
-		// Rebase the offset.
+		uint64_t base_address = 0;
 		switch (whence) {
 		case seek_set:
-			if (offset < 0)
-				throw_error();
-			abs_offset = m_offset + static_cast<uint64_t>(offset);
-			break;
-		case seek_end:
-			if (offset > 0)
-				throw_error();
-			abs_offset = m_length + static_cast<uint64_t>(offset);
+			base_address = m_offset;
 			break;
 		case seek_cur:
-			if (offset < 0 && m_where <= static_cast<uint64_t>(INT64_MAX) && offset < -static_cast<int64_t>(m_where))
-				throw_error();
-			if (offset >= 0 && static_cast<uint64_t>(offset) > m_length - m_offset)
-				throw_error();
-			abs_offset = m_where + static_cast<uint64_t>(offset);
+			base_address = m_where;
+			break;
+		case seek_end:
+			base_address = m_length;
 			break;
 		default:
-			break;
+			throw std::logic_error{ "invalid seek mode" };
 		}
 
-		if (abs_offset > static_cast<uint64_t>(INT64_MAX))
+		uint64_t new_address = base_address + static_cast<uint64_t>(offset);
+
+		// Check for overflow.
+		if (offset >= 0) {
+			if (new_address < base_address)
+				throw_error();
+		} else {
+			if (new_address > base_address)
+				throw_error();
+		}
+
+		if (new_address > static_cast<uint64_t>(INT64_MAX))
 			throw_error();
 
-		if (fseeko(m_file.get(), abs_offset, SEEK_SET)) {
+		if (fseeko(m_file.get(), new_address, SEEK_SET)) {
 			m_valid_pos = false;
 			throw_system_error();
 		}
-		m_where = abs_offset;
+		m_where = new_address;
 	}
 
 	uint64_t tell() const override

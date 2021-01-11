@@ -1,3 +1,4 @@
+#include "checked_int.h"
 #include "common.h"
 #include "io.h"
 #include "stream.h"
@@ -34,12 +35,15 @@ bool is_valid_format(const rawz_format &format)
 	// Impossible subsampling.
 	if (format.subsample_w > 2 || format.subsample_h > 2)
 		return false;
+	// Too much alignment.
+	if (format.alignment > 12)
+		return false;
 	return true;
 }
 
 size_t planar_frame_size(const rawz_format &format)
 {
-	size_t sz = 0;
+	checked_size_t sz = 0;
 	size_t alignment = static_cast<size_t>(1) << format.alignment;
 
 	for (unsigned p = 0; p < MAX_PLANES; ++p) {
@@ -48,29 +52,31 @@ size_t planar_frame_size(const rawz_format &format)
 
 		size_t width = is_chroma_plane(p) ? subsampled_dim(format.width, format.subsample_w) : format.width;
 		size_t height = is_chroma_plane(p) ? subsampled_dim(format.height, format.subsample_h) : format.height;
-		size_t rowsize = ceil_aligned(width * format.bytes_per_sample, format.alignment);
+		checked_size_t rowsize = ceil_aligned(checked_size_t{ width } * format.bytes_per_sample, format.alignment);
 		sz += rowsize * height;
 	}
 
-	return sz;
+	return sz.get();
 }
 
 void skip_plane(IOStream *io, unsigned width, unsigned height, unsigned bytes_per_sample, unsigned alignment)
 {
-	size_t rowsize = static_cast<size_t>(width) * bytes_per_sample;
-	size_t rowsize_aligned = ceil_aligned(rowsize, alignment);
-	io->skip(rowsize_aligned * height);
+	checked_size_t rowsize = checked_size_t{ width } * bytes_per_sample;
+	checked_size_t rowsize_aligned = ceil_aligned(rowsize, alignment);
+	checked_size_t n = rowsize_aligned * height;
+	io->skip(n.get());
 }
 
 void blit_plane(IOStream *io, unsigned width, unsigned height, unsigned bytes_per_sample, unsigned alignment, void *dst, ptrdiff_t stride)
 {
-	size_t rowsize = static_cast<size_t>(width) * bytes_per_sample;
-	size_t rowsize_aligned = ceil_aligned(rowsize, alignment);
+	checked_size_t rowsize = checked_size_t{ width } * bytes_per_sample;
+	checked_size_t rowsize_aligned = ceil_aligned(rowsize, alignment);
+	size_t diff = rowsize_aligned.get() - rowsize.get();
 
 	for (unsigned i = 0; i < height; ++i) {
-		io->read(dst, rowsize);
-		if (rowsize_aligned != rowsize)
-			io->skip(rowsize_aligned - rowsize);
+		io->read(dst, rowsize.get());
+		if (diff)
+			io->skip(diff);
 
 		dst = advance_ptr(dst, stride);
 	}

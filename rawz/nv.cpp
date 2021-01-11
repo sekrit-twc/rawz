@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
+#include "checked_int.h"
 #include "common.h"
 #include "io.h"
 #include "stream.h"
@@ -56,16 +57,20 @@ class NVVideoStream : public VideoStream {
 
 	void calculate_packet_size()
 	{
-		size_t luma_row_size = static_cast<size_t>(m_format.width) * m_format.bytes_per_sample;
+		size_t luma_width = m_format.width;
 		size_t luma_height = m_format.height;
+
+		checked_size_t luma_row_size = checked_size_t{ luma_width } * m_format.bytes_per_sample;
 		luma_row_size = ceil_aligned(luma_row_size, m_format.alignment);
 
 		size_t chroma_width = subsampled_dim(m_format.width, m_format.subsample_w);
 		size_t chroma_height = subsampled_dim(m_format.height, m_format.subsample_h);
-		size_t chroma_row_size = static_cast<size_t>(chroma_width) * m_format.bytes_per_sample * 2;
+
+		checked_size_t chroma_row_size = checked_size_t{ chroma_width } * m_format.bytes_per_sample * 2U;
 		chroma_row_size = ceil_aligned(chroma_row_size, m_format.alignment);
 
-		m_packet_size = luma_row_size * luma_height + chroma_row_size * chroma_height;
+		checked_size_t sz = luma_row_size * luma_height + chroma_row_size * chroma_height;
+		m_packet_size = sz.get();
 	}
 
 	void blit_nv_plane(void *u, void *v, ptrdiff_t stride_u, ptrdiff_t stride_v)

@@ -36,6 +36,9 @@
     <ClInclude Include="..\..\rawz\common.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\rawz\checked_int.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\libp2p\v210.cpp">
