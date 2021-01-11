@@ -34,13 +34,13 @@ public:
 
 	virtual void read(void *buf, size_t n) = 0;
 
-	virtual void skip(size_t n) = 0;
-
 	virtual void seek(int64_t offset, int whence) = 0;
 
 	virtual uint64_t tell() const = 0;
 
 	virtual uint64_t length() const = 0;
+
+	virtual void skip(size_t n);
 
 	template <class T>
 	void read(T &t) { read(&t, sizeof(t)); }

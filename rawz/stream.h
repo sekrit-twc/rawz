@@ -37,6 +37,8 @@ bool is_valid_format(const rawz_format &format);
 
 size_t planar_frame_size(const rawz_format &format);
 
+void skip_plane(IOStream *io, unsigned width, unsigned height, unsigned bytes_per_sample, unsigned alignment);
+
 void blit_plane(IOStream *io, unsigned width, unsigned height, unsigned bytes_per_sample, unsigned alignment, void *dst, ptrdiff_t stride);
 
 void blit_planar_frame(IOStream *io, const rawz_format &format, void * const planes[4], const ptrdiff_t stride[4]);

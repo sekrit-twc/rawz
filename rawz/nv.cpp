@@ -19,8 +19,12 @@ void deinterleave(const void *src, void *u, void *v, size_t n)
 	T *v_ptr = static_cast<T *>(v);
 
 	for (size_t i = 0; i < n; ++i) {
-		*u_ptr++ = *srcp++;
-		*v_ptr++ = *srcp++;
+		T u_val = *srcp++;
+		T v_val = *srcp++;
+		if (u_ptr)
+			*u_ptr++ = u_val;
+		if (v_ptr)
+			*v_ptr++ = v_val;
 	}
 }
 
@@ -75,8 +79,10 @@ class NVVideoStream : public VideoStream {
 			m_io->read(buffer.data(), buffer.size());
 			m_deinterleave(buffer.data(), u, v, width);
 
-			u = advance_ptr(u, stride_u);
-			v = advance_ptr(v, stride_v);
+			if (u)
+				u = advance_ptr(u, stride_u);
+			if (v)
+				v = advance_ptr(v, stride_v);
 		}
 	}
 public:
@@ -106,9 +112,12 @@ public:
 	{
 		seek_to_frame(m_io.get(), m_frameno, n, m_packet_size);
 
-		blit_plane(m_io.get(), m_format.width, m_format.height, m_format.bytes_per_sample, m_format.alignment, planes[0], stride[0]);
-		blit_nv_plane(planes[1], planes[2], stride[1], stride[2]);
+		if (planes[0])
+			blit_plane(m_io.get(), m_format.width, m_format.height, m_format.bytes_per_sample, m_format.alignment, planes[0], stride[0]);
+		else
+			skip_plane(m_io.get(), m_format.width, m_format.height, m_format.bytes_per_sample, m_format.alignment);
 
+		blit_nv_plane(planes[1], planes[2], stride[1], stride[2]);
 		++m_frameno;
 	} catch (...) {
 		m_frameno = -1;

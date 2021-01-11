@@ -55,6 +55,13 @@ size_t planar_frame_size(const rawz_format &format)
 	return sz;
 }
 
+void skip_plane(IOStream *io, unsigned width, unsigned height, unsigned bytes_per_sample, unsigned alignment)
+{
+	size_t rowsize = static_cast<size_t>(width) * bytes_per_sample;
+	size_t rowsize_aligned = ceil_aligned(rowsize, alignment);
+	io->skip(rowsize_aligned * height);
+}
+
 void blit_plane(IOStream *io, unsigned width, unsigned height, unsigned bytes_per_sample, unsigned alignment, void *dst, ptrdiff_t stride)
 {
 	size_t rowsize = static_cast<size_t>(width) * bytes_per_sample;
@@ -74,12 +81,16 @@ void blit_planar_frame(IOStream *io, const rawz_format &format, void * const pla
 	unsigned alignment = 1U << format.alignment;
 
 	for (unsigned p = 0; p < MAX_PLANES; ++p) {
-		if (!planes[p] || !(format.planes_mask & (1U << p)))
+		if (!(format.planes_mask & (1U << p)))
 			continue;
 
 		unsigned width = is_chroma_plane(p) ? subsampled_dim(format.width, format.subsample_w) : format.width;
 		unsigned height = is_chroma_plane(p) ? subsampled_dim(format.height, format.subsample_h) : format.height;
-		blit_plane(io, width, height, format.bytes_per_sample, alignment, planes[p], stride[p]);
+
+		if (planes[p])
+			blit_plane(io, width, height, format.bytes_per_sample, alignment, planes[p], stride[p]);
+		else
+			skip_plane(io, format.width, height, format.bytes_per_sample, alignment);
 	}
 }
 

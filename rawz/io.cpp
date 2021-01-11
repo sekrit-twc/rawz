@@ -147,17 +147,6 @@ public:
 		}
 	}
 
-	void skip(size_t n) override
-	{
-		char buf[256];
-
-		while (n) {
-			size_t cur = std::min(n, sizeof(buf));
-			read(buf, cur);
-			n -= cur;
-		}
-	}
-
 	void seek(int64_t offset, int whence) override
 	{
 		static_assert(sizeof(offset) == sizeof(m_where), "");
@@ -255,17 +244,6 @@ public:
 			throw eof{};
 	}
 
-	void skip(size_t n) override
-	{
-		char buf[256];
-
-		while (n) {
-			size_t cur = std::min(n, sizeof(buf));
-			read(buf, cur);
-			n -= cur;
-		}
-	}
-
 	void seek(int64_t offset, int whence) override
 	{
 		if (m_seek(offset, whence, m_user))
@@ -286,6 +264,27 @@ public:
 };
 
 } // namespace
+
+
+void IOStream::skip(size_t n)
+{
+	constexpr size_t thresh = 4096;
+
+	if (n >= thresh && seekable()) {
+		while (n) {
+			int64_t count = std::min(static_cast<uint64_t>(n), static_cast<uint64_t>(INT64_MAX));
+			seek(static_cast<int64_t>(n), seek_cur);
+		}
+	} else {
+		char buf[4096];
+
+		while (n) {
+			size_t cur = std::min(n, sizeof(buf));
+			read(buf, cur);
+			n -= cur;
+		}
+	}
+}
 
 
 void seek_to_frame(IOStream *io, int64_t &cur_frame, int64_t n, uint64_t packet_size, uint64_t base_offset) try
