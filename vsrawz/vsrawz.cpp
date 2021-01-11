@@ -80,12 +80,14 @@ class SourceFilter : public FilterBase {
 	rawz_video_stream_ptr m_stream;
 	VideoFrame m_prop_holder;
 	VSVideoInfo m_vi;
+	bool m_alpha;
 
 	void init_format(const rawz_format &formatz, bool rgb, const VapourCore &core)
 	{
 		VSVideoInfo vi{};
 		VSColorFamily cm = cmGray;
 		VSSampleType st = formatz.floating_point ? stFloat : stInteger;
+		int bits_per_sample = formatz.bits_per_sample;
 		int subsample_w = 0;
 		int subsample_h = 0;
 
@@ -116,14 +118,18 @@ class SourceFilter : public FilterBase {
 			cm = cmGray;
 		}
 
-		vi.format = core.register_format(cm, st, formatz.bits_per_sample, subsample_w, subsample_h);
+		if (!formatz.bytes_per_sample || formatz.bytes_per_sample > 4)
+			throw std::runtime_error{ "invalid bit depth" };
+
+		int bytes_per_sample = formatz.bytes_per_sample;
+		if (bits_per_sample <= (bytes_per_sample - 1) * 8 || bits_per_sample > bytes_per_sample * 8)
+			bits_per_sample = formatz.bytes_per_sample * 8;
+
+		vi.format = core.register_format(cm, st, bits_per_sample, subsample_w, subsample_h);
 		vi.fpsNum = 25;
 		vi.fpsDen = 1;
 		vi.numFrames = int64ToIntS(rawz_video_stream_framecount(m_stream.get()));
 		m_vi = vi;
-
-		if (formatz.planes_mask & (1 << 3))
-			(void)0; // TODO: Alpha
 	}
 
 	void init_metadata(const rawz_metadata &metadata, const VapourCore &core)
@@ -159,7 +165,7 @@ class SourceFilter : public FilterBase {
 			props.set_prop("_ChromaLocation", metadata.chromaloc);
 	}
 public:
-	SourceFilter(void * = nullptr) : m_vi() {}
+	SourceFilter(void * = nullptr) : m_vi(), m_alpha{} {}
 
 	const char *get_name(int) noexcept override
 	{
@@ -232,18 +238,18 @@ public:
 		init_format(formatz, rgb, core);
 		if (!isConstantFormat(&m_vi))
 			throw std::runtime_error{ "unsupported or incomplete format" };
+		if (formatz.planes_mask & (1U << 3) && in.get_prop<bool>("_Alpha", map::Ignore{}))
+			m_alpha = true;
 
 		rawz_metadata metadata{};
-		if (y4m) {
-			rawz_video_stream_metadata(m_stream.get(), &metadata);
-		} else {
+		rawz_video_stream_metadata(m_stream.get(), &metadata);
+		if (metadata.fpsnum < 0 && metadata.fpsden < 0) {
 			metadata.fpsnum = in.get_prop<int64_t>("fpsnum", map::Ignore{});
 			metadata.fpsden = in.get_prop<int64_t>("fpsden", map::Ignore{});
+		}
+		if (metadata.sarnum < 0 && metadata.sarden < 0) {
 			metadata.sarnum = in.get_prop<int64_t>("sarnum", map::Ignore{});
 			metadata.sarden = in.get_prop<int64_t>("sarden", map::Ignore{});
-			metadata.fullrange = -1;
-			metadata.fieldorder = -1;
-			metadata.chromaloc = -1;
 		}
 		init_metadata(metadata, core);
 
@@ -263,6 +269,7 @@ public:
 	ConstVideoFrame get_frame(int n, const VapourCore &core, VSFrameContext *frame_ctx) override
 	{
 		VideoFrame frame = core.new_video_frame(*m_vi.format, m_vi.width, m_vi.height, m_prop_holder);
+		VideoFrame alpha;
 		void *planes[4] = {};
 		ptrdiff_t stride[4] = {};
 
@@ -270,10 +277,19 @@ public:
 			planes[p] = frame.write_ptr(p);
 			stride[p] = frame.stride(p);
 		}
-		// TODO: Alpha
+		if (m_alpha) {
+			const VSFormat *alpha_fmt = core.register_format(
+				cmGray, static_cast<VSSampleType>(m_vi.format->sampleType), m_vi.format->bitsPerSample,
+				m_vi.format->subSamplingW, m_vi.format->subSamplingH);
+			alpha = core.new_video_frame(*alpha_fmt, m_vi.width, m_vi.height);
+			planes[3] = alpha.write_ptr(0);
+			stride[3] = alpha.stride(0);
+		}
 
 		if (rawz_video_stream_read(m_stream.get(), n, planes, stride))
 			rawz_rethrow_exception();
+		if (alpha)
+			frame.frame_props().set_prop("_Alpha", std::move(alpha));
 
 		return frame;
 	}
@@ -284,7 +300,7 @@ const PluginInfo g_plugin_info = {
 	"who.you.gonna.call.when.they.come.for.you", "rawz", "VapourSynth Raw Source", {
 		{ &FilterBase::filter_create<SourceFilter>, "Source",
 			"source:data;width:int:opt;height:int:opt;format:int:opt;"
-			"packing:data:opt;offset:int:opt;alignment:int:opt;y4m:int:opt;"
+			"packing:data:opt;offset:int:opt;alignment:int:opt;y4m:int:opt;alpha:int:opt;"
 			"fpsnum:int:opt;fpsden:int:opt;sarnum:int:opt;sarden:int:opt;" }
 	}
 };
