@@ -19,7 +19,7 @@ namespace rawz {
 class IOStream : public rawz_io_stream {
 public:
 	struct eof : public std::exception {
-		const char *what() const override { return "eof"; }
+		const char *what() const noexcept override { return "eof"; }
 	};
 
 	static constexpr int seek_set = 0;

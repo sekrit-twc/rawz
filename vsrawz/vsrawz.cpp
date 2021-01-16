@@ -182,7 +182,7 @@ public:
 		if (y4m_mode == Y4MMode::AUTO) {
 			size_t idx = path.rfind('.');
 			std::string ext = idx == std::string::npos ? ""s : path.substr(idx);
-			std::transform(ext.begin(), ext.end(), ext.begin(), std::tolower);
+			std::transform(ext.begin(), ext.end(), ext.begin(), static_cast<int(*)(int)>(std::tolower));
 			if (ext == ".y4m")
 				y4m = true;
 		}

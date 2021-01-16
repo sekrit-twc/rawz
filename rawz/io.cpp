@@ -23,8 +23,13 @@
   #define stat __stat64
 #else
   #include <cerrno>
+  #include <sys/types.h>
+  #include <sys/stat.h>
+  #include <unistd.h>
+
   #define WSTR(x) x
   #define filechar_t char
+
   static_assert(sizeof(off_t) == sizeof(int64_t), "64-bit files required");
 #endif
 
