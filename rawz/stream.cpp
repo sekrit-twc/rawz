@@ -84,8 +84,6 @@ void blit_plane(IOStream *io, unsigned width, unsigned height, unsigned bytes_pe
 
 void blit_planar_frame(IOStream *io, const rawz_format &format, void * const planes[4], const ptrdiff_t stride[4])
 {
-	unsigned alignment = 1U << format.alignment;
-
 	for (unsigned p = 0; p < MAX_PLANES; ++p) {
 		if (!(format.planes_mask & (1U << p)))
 			continue;
@@ -94,9 +92,9 @@ void blit_planar_frame(IOStream *io, const rawz_format &format, void * const pla
 		unsigned height = is_chroma_plane(p) ? subsampled_dim(format.height, format.subsample_h) : format.height;
 
 		if (planes[p])
-			blit_plane(io, width, height, format.bytes_per_sample, alignment, planes[p], stride[p]);
+			blit_plane(io, width, height, format.bytes_per_sample, format.alignment, planes[p], stride[p]);
 		else
-			skip_plane(io, format.width, height, format.bytes_per_sample, alignment);
+			skip_plane(io, format.width, height, format.bytes_per_sample, format.alignment);
 	}
 }
 
