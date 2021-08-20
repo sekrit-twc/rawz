@@ -151,6 +151,15 @@ public:
 		unsigned height = m_format.height;
 		unsigned vstep = 1U << m_format.subsample_h;
 
+		std::vector<uint8_t> tmp;
+		for (unsigned p = 0; p < 3; ++p) {
+			// Only the alpha channel is optional when invoking p2p.
+			if (!plane_ptrs[p]) {
+				tmp.resize(m_format.width * m_format.bytes_per_sample);
+				plane_ptrs[p] = tmp.data();
+			}
+		}
+
 		for (unsigned i = 0; i < height; i += vstep) {
 			m_io->read(buffer.data(), buffer.size());
 			m_unpack(buffer.data(), plane_ptrs, 0, m_format.width);
