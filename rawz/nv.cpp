@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
+#include <p2p.h>
 #include "checked_int.h"
 #include "common.h"
 #include "io.h"
@@ -10,24 +11,7 @@ namespace rawz {
 
 namespace {
 
-typedef void (*deinterleave_func)(const void *src, void *u, void *v, size_t n);
-
-template <class T>
-void deinterleave(const void *src, void *u, void *v, size_t n)
-{
-	const T *srcp = static_cast<const T*>(src);
-	T *u_ptr = static_cast<T *>(u);
-	T *v_ptr = static_cast<T *>(v);
-
-	for (size_t i = 0; i < n; ++i) {
-		T u_val = *srcp++;
-		T v_val = *srcp++;
-		if (u_ptr)
-			*u_ptr++ = u_val;
-		if (v_ptr)
-			*v_ptr++ = v_val;
-	}
-}
+typedef decltype(&p2p::packed_to_planar<p2p::packed_nv12>::unpack) deinterleave_func;
 
 
 class NVVideoStream : public VideoStream {
@@ -42,17 +26,16 @@ class NVVideoStream : public VideoStream {
 	{
 		switch (m_format.bytes_per_sample) {
 		case 1:
-			m_deinterleave = deinterleave<uint8_t>;
+			m_deinterleave = p2p::packed_to_planar<p2p::packed_nv12>::unpack;
 			break;
 		case 2:
-			m_deinterleave = deinterleave<uint16_t>;
-			break;
-		case 4:
-			m_deinterleave = deinterleave<uint32_t>;
+			m_deinterleave = p2p::packed_to_planar<p2p::packed_p216>::unpack;
 			break;
 		default:
 			throw std::runtime_error{ "unsupported bit depth" };
 		}
+
+		m_chroma_row_size = static_cast<size_t>(m_format.width >> m_format.subsample_w) * m_format.bytes_per_sample;
 	}
 
 	void calculate_packet_size()
@@ -79,15 +62,27 @@ class NVVideoStream : public VideoStream {
 		unsigned height = subsampled_dim(m_format.height, m_format.subsample_h);
 
 		std::vector<uint8_t> buffer(m_chroma_row_size);
+		std::vector<uint8_t> tmp;
+
+		if (!u) {
+			tmp.resize(m_chroma_row_size / 2);
+			u = tmp.data();
+			stride_u = 0;
+		}
+		if (!v) {
+			tmp.resize(m_chroma_row_size / 2);
+			v = tmp.data();
+			stride_v = 0;
+		}
+
+		void *plane_ptrs[4] = { nullptr, u, v, nullptr };
 
 		for (unsigned i = 0; i < height; ++i) {
 			m_io->read(buffer.data(), buffer.size());
-			m_deinterleave(buffer.data(), u, v, width);
+			m_deinterleave(buffer.data(), plane_ptrs, 0, width << 1); // Convert back to luma width of hypothetical 4:2:2 plane.
 
-			if (u)
-				u = advance_ptr(u, stride_u);
-			if (v)
-				v = advance_ptr(v, stride_v);
+			plane_ptrs[1] = advance_ptr(plane_ptrs[1], stride_u);
+			plane_ptrs[2] = advance_ptr(plane_ptrs[2], stride_v);
 		}
 	}
 public:
