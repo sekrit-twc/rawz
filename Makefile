@@ -1,5 +1,5 @@
 MY_CFLAGS := -O2 -fPIC $(CFLAGS)
-MY_CXXFLAGS := -std=c++14 -O2 -fPIC $(CXXFLAGS)
+MY_CXXFLAGS := -std=c++14 -O2 -fPIC -fvisibility=hidden $(CXXFLAGS)
 MY_CPPFLAGS := -Ilibp2p -Irawz -Ivsxx -Ivsxx/vapoursynth $(CPPFLAGS)
 MY_LDFLAGS := $(LDFLAGS)
 MY_LIBS := $(LIBS)
