@@ -7,10 +7,12 @@
 #include <unordered_map>
 #include <utility>
 #include "rawz.h"
-#include "vsxx_pluginmain.h"
+#include "VSConstants4.h"
+#include "VSHelper4.h"
+#include "vsxx4_pluginmain.h"
 
 using namespace std::string_literals;
-using namespace vsxx;
+using namespace vsxx4;
 
 namespace {
 
@@ -22,7 +24,7 @@ struct RawzVideoStreamFree {
 	void operator()(rawz_video_stream *ptr) { rawz_video_stream_free(ptr); }
 };
 
-[[noreturn]] void rawz_rethrow_exception()
+[[noreturn]] void throw_rawz_exception()
 {
 	throw std::runtime_error{ rawz_get_last_error() };
 }
@@ -47,7 +49,7 @@ int check_uint(unsigned x)
 
 std::pair<int64_t, int64_t> normalize_rational(int64_t num, int64_t den)
 {
-	vs_normalizeRational(&num, &den);
+	vsh::reduceRational(&num, &den);
 	if (den < 0) {
 		num = num == INT64_MIN ? INT64_MAX : -num;
 		den = den == INT64_MIN ? INT64_MAX : -den;
@@ -78,14 +80,14 @@ class SourceFilter : public FilterBase {
 	};
 
 	rawz_video_stream_ptr m_stream;
-	VideoFrame m_prop_holder;
+	Frame m_prop_holder;
 	VSVideoInfo m_vi;
 	bool m_alpha;
 
-	void init_format(const rawz_format &formatz, bool rgb, const VapourCore &core)
+	void init_format(const rawz_format &formatz, bool rgb, const Core &core)
 	{
 		VSVideoInfo vi{};
-		VSColorFamily cm = cmGray;
+		VSColorFamily color_family = cfGray;
 		VSSampleType st = formatz.floating_point ? stFloat : stInteger;
 		int bits_per_sample = formatz.bits_per_sample;
 		int subsample_w = 0;
@@ -113,9 +115,9 @@ class SourceFilter : public FilterBase {
 				vi.height = check_uint(padded_h);
 			}
 
-			cm = rgb ? cmRGB : cmYUV;
+			color_family = rgb ? cfRGB : cfYUV;
 		} else {
-			cm = cmGray;
+			color_family = cfGray;
 		}
 
 		if (!formatz.bytes_per_sample || formatz.bytes_per_sample > 4)
@@ -125,17 +127,20 @@ class SourceFilter : public FilterBase {
 		if (bits_per_sample <= (bytes_per_sample - 1) * 8 || bits_per_sample > bytes_per_sample * 8)
 			bits_per_sample = formatz.bytes_per_sample * 8;
 
-		vi.format = core.register_format(cm, st, bits_per_sample, subsample_w, subsample_h);
+		vi.format = core.query_video_format(color_family, st, bits_per_sample, subsample_w, subsample_h);
+		if (vi.format.colorFamily == cfUndefined)
+			throw std::runtime_error{ "invalid format" };
+
 		vi.fpsNum = 25;
 		vi.fpsDen = 1;
-		vi.numFrames = int64ToIntS(rawz_video_stream_framecount(m_stream.get()));
+		vi.numFrames = vsh::int64ToIntS(rawz_video_stream_framecount(m_stream.get()));
 		m_vi = vi;
 	}
 
-	void init_metadata(const rawz_metadata &metadata, const VapourCore &core)
+	void init_metadata(const rawz_metadata &metadata, const Core &core)
 	{
-		m_prop_holder = core.new_video_frame(*core.format_preset(pfGray8), 1, 1);
-		PropertyMapRef props = m_prop_holder.frame_props();
+		m_prop_holder = core.new_video_frame(core.get_video_format_by_id(pfGray8), 1, 1);
+		MapRef props = m_prop_holder.frame_props_rw();
 
 		if (metadata.sarnum && metadata.sarden) {
 			auto val = normalize_rational(metadata.sarnum, metadata.sarden);
@@ -154,25 +159,22 @@ class SourceFilter : public FilterBase {
 		}
 
 		if (metadata.fullrange == 0)
-			props.set_prop("_ColorRange", 1);
+			props.set_prop("_ColorRange", static_cast<int>(VSC_RANGE_LIMITED));
 		else if (metadata.fullrange == 1)
-			props.set_prop("_ColorRange", 0);
+			props.set_prop("_ColorRange", static_cast<int>(VSC_RANGE_FULL));
 
-		if (metadata.fieldorder >= 0 && metadata.fieldorder <= 2)
+		if (metadata.fieldorder >= 0)
 			props.set_prop("_FieldBased", metadata.fieldorder);
 
-		if (metadata.chromaloc >= 0 && metadata.chromaloc <= 5)
+		if (metadata.chromaloc >= 0)
 			props.set_prop("_ChromaLocation", metadata.chromaloc);
 	}
 public:
 	SourceFilter(void * = nullptr) : m_vi(), m_alpha{} {}
 
-	const char *get_name(int) noexcept override
-	{
-		return "Source";
-	}
+	const char *get_name(void *) noexcept override { return "Source"; }
 
-	std::pair<VSFilterMode, int> init(const ConstPropertyMap &in, const PropertyMap &out, const VapourCore &core) override
+	void init(const ConstMap &in, const Map &out, const Core &core) override
 	{
 		std::string path = in.get_prop<std::string>("source");
 		Y4MMode y4m_mode = static_cast<Y4MMode>(in.get_prop<int>("y4m", map::Ignore{}));
@@ -208,17 +210,17 @@ public:
 			formatz.width = int64_to_uint(in.get_prop<int64_t>("width"));
 			formatz.height = int64_to_uint(in.get_prop<int64_t>("height"));
 
-			const VSFormat *format = core.format_preset(static_cast<VSPresetFormat>(in.get_prop<int>("format")));
-			if (!format)
+			VSVideoFormat format = core.get_video_format_by_id(in.get_prop<int>("format"));
+			if (format.colorFamily == cfUndefined)
 				throw std::runtime_error{ "unregistered format" };
 
-			formatz.planes_mask = format->numPlanes == 3 ? 0x7 : 0x1;
-			formatz.subsample_w = format->subSamplingW;
-			formatz.subsample_h = format->subSamplingH;
-			formatz.bytes_per_sample = format->bytesPerSample;
-			formatz.bits_per_sample = format->bitsPerSample;
-			formatz.floating_point = format->sampleType == stFloat;
-			rgb = format->colorFamily == cmRGB;
+			formatz.planes_mask = format.numPlanes == 3 ? 0x7 : 0x1;
+			formatz.subsample_w = format.subSamplingW;
+			formatz.subsample_h = format.subSamplingH;
+			formatz.bytes_per_sample = format.bytesPerSample;
+			formatz.bits_per_sample = format.bitsPerSample;
+			formatz.floating_point = format.sampleType == stFloat;
+			rgb = format.colorFamily == cfRGB;
 
 			formatz.alignment = in.get_prop<int>("alignment", map::Ignore{});
 			if (formatz.alignment > 12)
@@ -229,14 +231,14 @@ public:
 		offset = std::max(offset, static_cast<int64_t>(0));
 		rawz_io_stream_ptr io{ rawz_io_open_file(path.c_str(), 1, offset) };
 		if (!io)
-			rawz_rethrow_exception();
+			throw_rawz_exception();
 
 		m_stream.reset(rawz_video_stream_create(io.release(), &formatz));
 		if (!m_stream)
-			rawz_rethrow_exception();
+			throw_rawz_exception();
 
 		init_format(formatz, rgb, core);
-		if (!isConstantFormat(&m_vi))
+		if (!vsh::isConstantVideoFormat(&m_vi))
 			throw std::runtime_error{ "unsupported or incomplete format" };
 		if (formatz.planes_mask & (1U << 3) && in.get_prop<bool>("_Alpha", map::Ignore{}))
 			m_alpha = true;
@@ -253,54 +255,50 @@ public:
 		}
 		init_metadata(metadata, core);
 
-		return{ fmUnordered, 0 };
+		create_video_filter(out, m_vi, fmUnordered, make_deps(), core);
 	}
 
-	std::pair<const VSVideoInfo *, size_t> get_video_info() noexcept override
+	ConstFrame get_frame_initial(int n, const Core &core, const FrameContext &frame_context, void *) override
 	{
-		return{ &m_vi, 1 };
+		return get_frame(n, core, frame_context, nullptr);
 	}
 
-	ConstVideoFrame get_frame_initial(int n, const VapourCore &core, VSFrameContext *frame_ctx) override
+	ConstFrame get_frame(int n, const Core &core, const FrameContext &frame_context, void *) override
 	{
-		return get_frame(n, core, frame_ctx);
-	}
-
-	ConstVideoFrame get_frame(int n, const VapourCore &core, VSFrameContext *frame_ctx) override
-	{
-		VideoFrame frame = core.new_video_frame(*m_vi.format, m_vi.width, m_vi.height, m_prop_holder);
-		VideoFrame alpha;
+		Frame frame = core.new_video_frame(m_vi.format, m_vi.width, m_vi.height, m_prop_holder);
+		Frame alpha;
 		void *planes[4] = {};
 		ptrdiff_t stride[4] = {};
 
-		for (int p = 0; p < m_vi.format->numPlanes; ++p) {
+		for (int p = 0; p < m_vi.format.numPlanes; ++p) {
 			planes[p] = frame.write_ptr(p);
 			stride[p] = frame.stride(p);
 		}
 		if (m_alpha) {
-			const VSFormat *alpha_fmt = core.register_format(
-				cmGray, static_cast<VSSampleType>(m_vi.format->sampleType), m_vi.format->bitsPerSample,
-				m_vi.format->subSamplingW, m_vi.format->subSamplingH);
-			alpha = core.new_video_frame(*alpha_fmt, m_vi.width, m_vi.height);
+			VSVideoFormat alpha_fmt = core.query_video_format(
+				cfGray, static_cast<VSSampleType>(m_vi.format.sampleType), m_vi.format.bitsPerSample,
+				m_vi.format.subSamplingW, m_vi.format.subSamplingH);
+			alpha = core.new_video_frame(alpha_fmt, m_vi.width, m_vi.height);
 			planes[3] = alpha.write_ptr(0);
 			stride[3] = alpha.stride(0);
 		}
 
 		if (rawz_video_stream_read(m_stream.get(), n, planes, stride))
-			rawz_rethrow_exception();
+			throw_rawz_exception();
 		if (alpha)
-			frame.frame_props().set_prop("_Alpha", std::move(alpha));
+			frame.frame_props_rw().set_prop("_Alpha", std::move(alpha));
 
 		return frame;
 	}
 };
 
 
-const PluginInfo g_plugin_info = {
-	"who.you.gonna.call.when.they.come.for.you", "rawz", "VapourSynth Raw Source", {
+const PluginInfo4 g_plugin_info4 = {
+	"who.you.gonna.call.when.they.come.for.you", "rawz", "VapourSynth Raw Source", 0, {
 		{ &FilterBase::filter_create<SourceFilter>, "Source",
 			"source:data;width:int:opt;height:int:opt;format:int:opt;"
-			"packing:data:opt;offset:int:opt;alignment:int:opt;y4m:int:opt;alpha:int:opt;"
-			"fpsnum:int:opt;fpsden:int:opt;sarnum:int:opt;sarden:int:opt;" }
+				"packing:data:opt;offset:int:opt;alignment:int:opt;y4m:int:opt;alpha:int:opt;"
+				"fpsnum:int:opt;fpsden:int:opt;sarnum:int:opt;sarden:int:opt;",
+			"clip:vnode;" }
 	}
 };

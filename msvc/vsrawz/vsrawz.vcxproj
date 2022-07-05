@@ -151,14 +151,15 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\vsxx\VapourSynth++.hpp" />
-    <ClInclude Include="..\..\vsxx\VapourSynth.h" />
-    <ClInclude Include="..\..\vsxx\VSHelper.h" />
-    <ClInclude Include="..\..\vsxx\vsxx_pluginmain.h" />
+    <ClCompile Include="..\..\vsrawz\vsrawz.cpp" />
+    <ClCompile Include="..\..\vsxx\vsxx4_pluginmain.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\vsrawz\vsrawz.cpp" />
-    <ClCompile Include="..\..\vsxx\vsxx_pluginmain.cpp" />
+    <ClInclude Include="..\..\vsxx\VapourSynth4++.hpp" />
+    <ClInclude Include="..\..\vsxx\vapoursynth\VapourSynth4.h" />
+    <ClInclude Include="..\..\vsxx\vapoursynth\VSConstants4.h" />
+    <ClInclude Include="..\..\vsxx\vapoursynth\VSHelper4.h" />
+    <ClInclude Include="..\..\vsxx\vsxx4_pluginmain.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -32,10 +32,11 @@ p2p_OBJS = \
 	libp2p/v210.o
 
 vsxx_HDRS = \
-	vsxx/vapoursynth/VapourSynth.h \
-	vsxx/vapoursynth/VSHelper.h \
-	vsxx/VapourSynth++.hpp \
-	vsxx/vsxx_pluginmain.h
+	vsxx/vapoursynth/VapourSynth4.h \
+	vsxx/vapoursynth/VSConstants4.h \
+	vsxx/vapoursynth/VSHelper4.h \
+	vsxx/VapourSynth4++.hpp \
+	vsxx/vsxx4_pluginmain.h
 
 ifeq ($(X86), 1)
   MY_CPPFLAGS := -DP2P_SIMD $(MY_CPPFLAGS)
@@ -44,7 +45,7 @@ endif
 
 all: vsrawz.so
 
-vsrawz.so: vsrawz/vsrawz.o vsxx/vsxx_pluginmain.o $(p2p_OBJS) $(rawz_OBJS)
+vsrawz.so: vsrawz/vsrawz.o vsxx/vsxx4_pluginmain.o $(p2p_OBJS) $(rawz_OBJS)
 	$(CXX) -shared $(MY_LDFLAGS) $^ $(MY_LIBS) -o $@
 
 clean:
