@@ -21,7 +21,15 @@ rawz_OBJS = \
 	rawz/y4m.o
 
 p2p_HDRS = \
-	libp2p/p2p.h
+	libp2p/p2p.h \
+	libp2p/simd/cpuinfo_x86.h \
+	libp2p/simd/p2p_simd.h
+
+p2p_OBJS = \
+	libp2p/simd/cpuinfo_x86.o \
+	libp2p/simd/p2p_simd.o \
+	libp2p/simd/p2p_sse41.o \
+	libp2p/v210.o
 
 vsxx_HDRS = \
 	vsxx/VapourSynth.h \
@@ -30,13 +38,18 @@ vsxx_HDRS = \
 	vsxx/VSHelper.h \
 	vsxx/vsxx_pluginmain.h
 
+ifeq ($(X86), 1)
+  MY_CPPFLAGS := -DP2P_SIMD $(MY_CPPFLAGS)
+  libp2p/simd/p2p_sse41.o: EXTRA_CXXFLAGS := -msse4.1
+endif
+
 all: vsrawz.so
 
-vsrawz.so: vsrawz/vsrawz.o vsxx/vsxx_pluginmain.o $(rawz_OBJS)
+vsrawz.so: vsrawz/vsrawz.o vsxx/vsxx_pluginmain.o $(p2p_OBJS) $(rawz_OBJS)
 	$(CXX) -shared $(MY_LDFLAGS) $^ $(MY_LIBS) -o $@
 
 clean:
-	rm -f *.a *.o *.so rawz/*.o vsrawz/*.o vsxx/*.o
+	rm -f *.a *.o *.so libp2p/*.o libp2p/simd/*.o rawz/*.o vsrawz/*.o vsxx/*.o
 
 %.o: %.cpp $(p2p_HDRS) $(rawz_HDRS) $(vsxx_HDRS)
 	$(CXX) -c $(EXTRA_CXXFLAGS) $(MY_CXXFLAGS) $(MY_CPPFLAGS) $< -o $@
