@@ -1,6 +1,6 @@
 MY_CFLAGS := -O2 -fPIC $(CFLAGS)
 MY_CXXFLAGS := -std=c++14 -O2 -fPIC $(CXXFLAGS)
-MY_CPPFLAGS := -Ilibp2p -Irawz -Ivsxx $(CPPFLAGS)
+MY_CPPFLAGS := -Ilibp2p -Irawz -Ivsxx -Ivsxx/vapoursynth $(CPPFLAGS)
 MY_LDFLAGS := $(LDFLAGS)
 MY_LIBS := $(LIBS)
 
@@ -32,10 +32,9 @@ p2p_OBJS = \
 	libp2p/v210.o
 
 vsxx_HDRS = \
-	vsxx/VapourSynth.h \
+	vsxx/vapoursynth/VapourSynth.h \
+	vsxx/vapoursynth/VSHelper.h \
 	vsxx/VapourSynth++.hpp \
-	vsxx/VSScript.h \
-	vsxx/VSHelper.h \
 	vsxx/vsxx_pluginmain.h
 
 ifeq ($(X86), 1)
