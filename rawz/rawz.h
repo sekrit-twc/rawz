@@ -4,6 +4,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum rawz_packing_mode {
 	RAWZ_PLANAR,
 	RAWZ_Y4M,
@@ -78,5 +82,9 @@ void rawz_video_stream_free(rawz_video_stream *ptr);
 
 
 void rawz_format_default(rawz_format *ptr);
+
+#ifdef __cplusplus
+} // extern "C"
+#endif
 
 #endif /* RAWZ_H_ */
