@@ -7,6 +7,8 @@
 #include "io.h"
 #include "stream.h"
 
+namespace p2p = p2p_rawz;
+
 namespace rawz {
 
 namespace {
