@@ -143,9 +143,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\libp2p\p2p.h" />
-    <ClInclude Include="..\..\libp2p\simd\cpuinfo_x86.h" />
-    <ClInclude Include="..\..\libp2p\simd\p2p_simd.h" />
     <ClInclude Include="..\..\rawz\checked_int.h" />
     <ClInclude Include="..\..\rawz\common.h" />
     <ClInclude Include="..\..\rawz\io.h" />
@@ -153,10 +150,6 @@
     <ClInclude Include="..\..\rawz\stream.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\libp2p\simd\cpuinfo_x86.cpp" />
-    <ClCompile Include="..\..\libp2p\simd\p2p_simd.cpp" />
-    <ClCompile Include="..\..\libp2p\simd\p2p_sse41.cpp" />
-    <ClCompile Include="..\..\libp2p\v210.cpp" />
     <ClCompile Include="..\..\rawz\interleaved.cpp" />
     <ClCompile Include="..\..\rawz\io.cpp" />
     <ClCompile Include="..\..\rawz\nv.cpp" />

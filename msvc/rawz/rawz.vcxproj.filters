@@ -13,23 +13,8 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="Header Files\libp2p">
-      <UniqueIdentifier>{ea7f2c21-ac0b-4614-8331-a52c0faec2de}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\libp2p">
-      <UniqueIdentifier>{d344780c-c737-4eb6-882b-2a003a0f7553}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\libp2p\simd">
-      <UniqueIdentifier>{43f19a3a-b44e-4fae-88b2-83cf17815b19}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Header Files\libp2p\simd">
-      <UniqueIdentifier>{d0bf3453-6064-4afe-82c2-96749b066182}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\libp2p\p2p.h">
-      <Filter>Header Files\libp2p</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\rawz\rawz.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -45,17 +30,8 @@
     <ClInclude Include="..\..\rawz\checked_int.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\libp2p\simd\cpuinfo_x86.h">
-      <Filter>Header Files\libp2p\simd</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\libp2p\simd\p2p_simd.h">
-      <Filter>Header Files\libp2p\simd</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\libp2p\v210.cpp">
-      <Filter>Source Files\libp2p</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\rawz\rawz.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -76,15 +52,6 @@
     </ClCompile>
     <ClCompile Include="..\..\rawz\nv.cpp">
       <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\libp2p\simd\cpuinfo_x86.cpp">
-      <Filter>Source Files\libp2p\simd</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\libp2p\simd\p2p_simd.cpp">
-      <Filter>Source Files\libp2p\simd</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\libp2p\simd\p2p_sse41.cpp">
-      <Filter>Source Files\libp2p\simd</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
