@@ -240,7 +240,7 @@ public:
 		init_format(formatz, rgb, core);
 		if (!vsh::isConstantVideoFormat(&m_vi))
 			throw std::runtime_error{ "unsupported or incomplete format" };
-		if (formatz.planes_mask & (1U << 3) && in.get_prop<bool>("_Alpha", map::Ignore{}))
+		if (formatz.planes_mask & (1U << 3) && in.get_prop<bool>("alpha", map::Ignore{}))
 			m_alpha = true;
 
 		rawz_metadata metadata{};
