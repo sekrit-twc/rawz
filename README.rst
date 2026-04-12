@@ -119,4 +119,6 @@ Other remarks:
 Compilation
 ===========
 
+Be sure to fetch the submodules with `git submodules update --init`.
+
 Use the Makefile.
