@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <charconv>
 #include <climits>
 #include <cstdint>
 #include <cstdlib>
@@ -8,6 +9,8 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <system_error>
 #include <utility>
 #include "io.h"
 #include "stream.h"
@@ -27,65 +30,56 @@ constexpr int CHROMA_BOTTOM_LEFT = 4;
 constexpr int CHROMA_BOTTOM = 5;
 
 
-void parse_uint(const char *str, unsigned &out)
+[[noreturn]] void throw_error_msg(std::string_view msg, std::string_view details = {})
 {
-	auto throw_error = [&]()
-	{
-		throw std::runtime_error{ "invalid integer: "s + str };
-	};
-
-	if (!*str)
-		throw_error();
-
-	char *endp = nullptr;
-	long long x = strtoll(str, &endp, 10);
-
-	// Invalid number.
-	if (*endp)
-		throw_error();
-
-#if LLONG_MAX > UINT_MAX
-	if (x > static_cast<long long>(UINT_MAX))
-		throw_error();
-#endif
-	if (x < 0)
-		throw_error();
-
-	out = static_cast<unsigned>(x);
+	std::string s;
+	s.reserve(msg.size() + details.size());
+	s.append(msg);
+	s.append(details);
+	throw std::runtime_error{ s.c_str() };
 }
 
-void parse_rational(const char *str, int64_t &num, int64_t &den)
+template <class T>
+bool to_integer(std::string_view s, T &val) noexcept
+{
+	std::from_chars_result res = std::from_chars(&*s.begin(), &*s.begin() + s.size(), val, 10);
+	return res.ec != std::errc{} || res.ptr == &*s.begin() + s.size();
+}
+
+void parse_uint(std::string_view str, unsigned &out)
+{
+	if (!to_integer(str, out))
+		throw_error_msg("invalid integer: ", str);
+}
+
+bool starts_with(std::string_view s, std::string_view v)
+{
+	return s.rfind(v, 0) == 0;
+}
+
+void parse_rational(std::string_view str, int64_t &num, int64_t &den)
 {
 	auto throw_error = [&]()
 	{
-		throw std::runtime_error{ "invalid rational: "s + str };
+		throw_error_msg("invalid rational: ", str);
 	};
 
-	const char *colon = std::strchr(str, ':');
-	if (!colon || !*(colon + 1))
+	size_t colon_pos = str.find(':');
+	if (colon_pos == std::string_view::npos)
 		throw_error();
 
-	char *endp = nullptr;
-
-	long long num_val = strtoll(str, &endp, 10);
-	if (endp != colon)
+	if (!to_integer(str.substr(0, colon_pos), num))
 		throw_error();
-
-	long long den_val = strtoll(colon + 1, &endp, 10);
-	if (*endp)
+	if (!to_integer(str.substr(colon_pos + 1), den))
 		throw_error();
-
-#if LLONG_MAX > INT64_MAX
-	if (num > INT64_MAX || num < INT64_MIN || den > INT64_MAX || den < INT64_MIN)
-		throw_error();
-#endif
-
-	num = num_val;
-	den = den_val;
 }
 
 
 class Y4MStream : public VideoStream {
+	static constexpr std::string_view s_y4m_magic = "YUV4MPEG2 ";
+	static constexpr std::string_view s_frame_magic = "FRAME\n";
+	static constexpr std::string_view s_frame_magic_bad = "FRAME ";
+
 	std::unique_ptr<IOStream> m_io;
 	rawz_format m_format;
 	rawz_metadata m_metadata;
@@ -93,11 +87,17 @@ class Y4MStream : public VideoStream {
 	uint64_t m_packet_size;
 	int64_t m_frameno;
 
-	void decode_color_format(const char *str)
+	template <size_t N>
+	static constexpr std::string_view to_sv(const std::array<char, N> &arr)
+	{
+		return{ arr.data(), arr.size() };
+	}
+
+	void decode_color_format(std::string_view str)
 	{
 		auto throw_error = [&]()
 		{
-			throw std::runtime_error{ "unsupported color format: "s + str };
+			throw_error_msg("unsupported color format: ", str);
 		};
 
 		auto set420special = [&](int chromaloc)
@@ -110,17 +110,16 @@ class Y4MStream : public VideoStream {
 			m_metadata.chromaloc = chromaloc;
 		};
 
-		// Special formats.
-		if (!std::strcmp(str, "420jpeg")) {
+		if ("420jpeg") {
 			set420special(CHROMA_CENTER);
 			return;
-		} else if (!std::strcmp(str, "420mpeg2")) {
+		} else if (str == "420mpeg2") {
 			set420special(CHROMA_LEFT);
 			return;
-		} else if (!std::strcmp(str, "420paldv")) {
+		} else if (str == "420paldv") {
 			set420special(CHROMA_TOP_LEFT);
 			return;
-		} else if (!std::strcmp(str, "444alpha")) {
+		} else if (str == "444alpha") {
 			m_format.planes_mask = 0xF;
 			m_format.subsample_w = 0;
 			m_format.subsample_h = 0;
@@ -131,7 +130,8 @@ class Y4MStream : public VideoStream {
 
 		// Classify subsampling format.
 		rawz_format format = m_format;
-		const char *depth = str;
+		std::string_view parse = str;
+		char first_char = parse.front();
 
 		auto set_color_format = [&](unsigned planes, unsigned subsample_w, unsigned subsample_h)
 		{
@@ -140,33 +140,23 @@ class Y4MStream : public VideoStream {
 			format.subsample_h = subsample_h;
 		};
 
-		if (!strncmp(str, "mono", 4)) {
-			set_color_format(0x1, 0, 0);
-			depth = str + 4;
-		} else if (!strncmp(str, "420", 3)) {
-			set_color_format(0x7, 1, 1);
-			depth = str + 3;
-		} else if (!strncmp(str, "422", 3)) {
-			set_color_format(0x7, 1, 0);
-			depth = str + 3;
-		} else if (!strncmp(str, "444", 3)) {
-			set_color_format(0x7, 0, 0);
-			depth = str + 3;
-		} else if (!strncmp(str, "410", 3)) {
-			set_color_format(0x7, 2, 2);
-			depth = str + 3;
-		} else if (!strncmp(str, "411", 3)) {
-			set_color_format(0x7, 2, 0);
-			depth = str + 3;
-		} else if (!strncmp(str, "440", 3)) {
-			set_color_format(0x7, 0, 1);
-			depth = str + 3;
-		} else {
-			throw_error();
-		}
+#define TEST(val, planes, subsample_w, subsample_h) \
+  if (starts_with(parse, val)) { \
+    set_color_format(planes, subsample_w, subsample_h); \
+    parse = parse.substr(std::string_view{ val }.size()); \
+  }
+		TEST("mono", 0x1, 0, 0)
+		else TEST("420", 0x7, 1, 1)
+		else TEST("422", 0x7, 1, 0)
+		else TEST("444", 0x7, 0, 0)
+		else TEST("410", 0x7, 2, 2)
+		else TEST("411", 0x7, 2, 0)
+		else TEST("440", 0x7, 0, 1)
+		else throw_error();
+#undef TEST
 
 		// Default is 8-bit.
-		if (!*depth) {
+		if (parse.empty()) {
 			format.bytes_per_sample = 1;
 			format.bits_per_sample = 8;
 			m_format = format;
@@ -174,22 +164,26 @@ class Y4MStream : public VideoStream {
 		}
 
 		// Skip the 'p' in 420p8, etc.
-		if (*str == '4')
-			++depth;
+		if (first_char == '4') {
+			if (parse.front() != 'p')
+				throw_error();
+			parse = parse.substr(1);
+		}
 
 		// Classify bit depth.
-		if (!strcmp(depth, "h")) {
+		if (parse == "h") {
 			format.bytes_per_sample = 2;
 			format.bits_per_sample = 16;
 			format.floating_point = 1;
-		} else if (!strcmp(depth, "s")) {
+		} else if (parse == "s") {
 			format.bytes_per_sample = 4;
 			format.bits_per_sample = 32;
 			format.floating_point = 1;
 		} else {
 			unsigned d;
 
-			parse_uint(depth, d);
+			if (!to_integer(parse, d))
+				throw_error();
 			if (d > 16)
 				throw_error();
 
@@ -200,21 +194,22 @@ class Y4MStream : public VideoStream {
 		m_format = format;
 	}
 
-	void decode_extension(const char *str, bool &have_yscss_error)
+	void decode_extension(std::string_view str, bool &have_yscss_error)
 	{
-		const char *delim = std::strchr(str, '=');
-		if (!delim)
+		size_t delim_pos = str.find('=');
+		if (delim_pos == std::string_view::npos)
 			return;
 
-		std::string key{ str, static_cast<size_t>(delim - str) };
-		std::string val{ delim + 1 };
+		std::string_view key = str.substr(0, delim_pos);
+		std::string_view val = str.substr(delim_pos + 1);
 
 		if (key == "YSCSS") {
 			constexpr int (*tolower)(int) = std::tolower;
 
-			std::transform(val.begin(), val.end(), val.begin(), tolower);
+			std::string val_lower(val.size(), '\0');
+			std::transform(val.begin(), val.end(), val_lower.begin(), tolower);
 			try {
-				decode_color_format(val.c_str());
+				decode_color_format(val_lower);
 				have_yscss_error = false;
 			} catch (const std::runtime_error &) {
 				have_yscss_error = true;
@@ -230,7 +225,7 @@ class Y4MStream : public VideoStream {
 	// Return true on end of header.
 	bool read_header_property(bool &have_c, bool &have_yscss_error)
 	{
-		const size_t limit = 128;
+		constexpr size_t limit = 128;
 		std::string buffer;
 
 		do {
@@ -247,33 +242,36 @@ class Y4MStream : public VideoStream {
 		if (buffer.empty())
 			return eoh;
 
-		switch (buffer.front()) {
+		char tag = buffer.front();
+		std::string_view val{ buffer.c_str() + 1, buffer.size() - 1 };
+
+		switch (tag) {
 		case 'W':
-			parse_uint(buffer.c_str() + 1, m_format.width);
+			parse_uint(val, m_format.width);
 			break;
 		case 'H':
-			parse_uint(buffer.c_str() + 1, m_format.height);
+			parse_uint(val, m_format.height);
 			break;
 		case 'F':
-			parse_rational(buffer.c_str() + 1, m_metadata.fpsnum, m_metadata.fpsden);
+			parse_rational(val, m_metadata.fpsnum, m_metadata.fpsden);
 			break;
 		case 'A':
-			parse_rational(buffer.c_str() + 1, m_metadata.sarnum, m_metadata.sarden);
+			parse_rational(val, m_metadata.sarnum, m_metadata.sarden);
 			break;
 		case 'C':
-			decode_color_format(buffer.c_str() + 1);
+			decode_color_format(val);
 			have_c = true;
 			break;
 		case 'I':
-			if (buffer[1] == 'p')
+			if (val == "p")
 				m_metadata.fieldorder = 0;
-			else if (buffer[1] == 't')
+			else if (val == "t")
 				m_metadata.fieldorder = 1;
-			else if (buffer[2] == 'b')
+			else if (val == "b")
 				m_metadata.fieldorder = 2;
 			break;
 		case 'X':
-			decode_extension(buffer.c_str() + 1, have_yscss_error);
+			decode_extension(val, have_yscss_error);
 			break;
 		default:
 			break;
@@ -284,9 +282,9 @@ class Y4MStream : public VideoStream {
 
 	void read_header()
 	{
-		std::array<char, sizeof("YUV4MPEG2 ") - 1> header{};
+		std::array<char, s_y4m_magic.size()> header{};
 		m_io->read(header);
-		if (std::strncmp(header.data(), "YUV4MPEG2 ", header.size()))
+		if (to_sv(header) != s_y4m_magic)
 			throw std::runtime_error{ "missing Y4M header" };
 
 		bool have_c = false;
@@ -325,7 +323,7 @@ public:
 			throw std::runtime_error{ "incomplete Y4M header" };
 
 		m_offset = m_io->tell();
-		m_packet_size = std::strlen("FRAME\n") + planar_frame_size(m_format);
+		m_packet_size = s_frame_magic.size() + planar_frame_size(m_format);
 		m_frameno = 0;
 	}
 
@@ -343,11 +341,11 @@ public:
 	{
 		seek_to_frame(m_io.get(), m_frameno, n, m_packet_size, m_offset);
 
-		std::array<char, sizeof("FRAME\n") - 1> header{};
+		std::array<char, s_frame_magic.size()> header{};
 		m_io->read(header);
-		if (!std::strncmp(header.data(), "FRAME ", header.size()))
+		if (to_sv(header) == s_frame_magic_bad)
 			throw std::runtime_error{ "Y4M frame properties not supported" };
-		if (std::strncmp(header.data(), "FRAME\n", header.size()))
+		if (to_sv(header) != s_frame_magic)
 			throw std::runtime_error{ "missing Y4M frame header" };
 
 		blit_planar_frame(m_io.get(), m_format, planes, stride);

@@ -58,7 +58,7 @@ std::pair<int64_t, int64_t> normalize_rational(int64_t num, int64_t den)
 }
 
 
-const std::unordered_map<std::string, rawz_packing_mode> g_packing_mode_table{
+const std::unordered_map<std::string_view, rawz_packing_mode> g_packing_mode_table{
 	{ "argb",  RAWZ_ARGB },
 	{ "rgba",  RAWZ_RGBA },
 	{ "rgb",   RAWZ_RGB },
@@ -176,14 +176,14 @@ public:
 
 	void init(const ConstMap &in, const Map &out, const Core &core) override
 	{
-		std::string path = in.get_prop<std::string>("source");
+		std::string_view path = in.get_prop<std::string_view>("source");
 		Y4MMode y4m_mode = static_cast<Y4MMode>(in.get_prop<int>("y4m", map::Ignore{}));
 		bool y4m = y4m_mode == Y4MMode::FORCE;
 
 		// Check for Y4M file.
 		if (y4m_mode == Y4MMode::AUTO) {
 			size_t idx = path.rfind('.');
-			std::string ext = idx == std::string::npos ? ""s : path.substr(idx);
+			std::string ext = idx == std::string::npos ? ""s : std::string(path.substr(idx));
 			std::transform(ext.begin(), ext.end(), ext.begin(), static_cast<int(*)(int)>(std::tolower));
 			if (ext == ".y4m")
 				y4m = true;
@@ -198,10 +198,10 @@ public:
 			formatz.mode = RAWZ_Y4M;
 		} else {
 			if (in.contains("packing")) {
-				std::string key = in.get_prop<std::string>("packing");
+				std::string_view key = in.get_prop<std::string_view>("packing");
 				auto it = g_packing_mode_table.find(key);
 				if (it == g_packing_mode_table.end())
-					throw std::runtime_error{ "unknown packing mode: " + key };
+					throw std::runtime_error{ "unknown packing mode: " + std::string{ key } };
 				formatz.mode = it->second;
 			} else {
 				formatz.mode = RAWZ_PLANAR;
@@ -229,7 +229,7 @@ public:
 
 		int64_t offset = in.get_prop<int64_t>("offset", map::Ignore{});
 		offset = std::max(offset, static_cast<int64_t>(0));
-		rawz_io_stream_ptr io{ rawz_io_open_file(path.c_str(), 1, offset) };
+		rawz_io_stream_ptr io{ rawz_io_open_file(path.data(), 1, offset) };
 		if (!io)
 			throw_rawz_exception();
 
