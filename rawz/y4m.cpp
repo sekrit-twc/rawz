@@ -212,10 +212,9 @@ class Y4MStream : public VideoStream {
 		if (key == "YSCSS") {
 			constexpr int (*tolower)(int) = std::tolower;
 
-			std::string lower = str;
-			std::transform(lower.begin(), lower.end(), lower.begin(), tolower);
+			std::transform(val.begin(), val.end(), val.begin(), tolower);
 			try {
-				decode_color_format(lower.c_str());
+				decode_color_format(val.c_str());
 				have_yscss_error = false;
 			} catch (const std::runtime_error &) {
 				have_yscss_error = true;
