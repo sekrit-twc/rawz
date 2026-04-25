@@ -3,6 +3,7 @@
 #endif
 
 #include <cassert>
+#include <cerrno>
 #include <cstdio>
 #include <memory>
 #include <stdexcept>
@@ -12,18 +13,13 @@
 #include "io.h"
 
 #ifdef _WIN32
-  #include <Windows.h>
+  #include <filesystem>
 
   #define WSTR(x) L##x
   #define filechar_t wchar_t
 #else
-  #include <cerrno>
-  #include <unistd.h>
-
   #define WSTR(x) x
   #define filechar_t char
-
-  static_assert(sizeof(off_t) == sizeof(int64_t), "64-bit files required");
 #endif
 
 #ifdef _MSC_VER
@@ -33,6 +29,8 @@
   #define fstat _fstat64
   #define ftello _ftelli64
   #define stat __stat64
+#else
+  static_assert(sizeof(off_t) == sizeof(int64_t), "64-bit files required");
 #endif
 
 
@@ -47,11 +45,7 @@ static_assert(IOStream::seek_end == SEEK_END, "seek macro mismatch");
 
 [[noreturn]] void throw_system_error()
 {
-#ifdef _WIN32
-	throw std::system_error{ static_cast<int>(GetLastError()), std::system_category() };
-#else
 	throw std::system_error{ errno, std::generic_category() };
-#endif
 }
 
 
@@ -65,18 +59,7 @@ typedef std::unique_ptr<std::FILE, FileCloser> unique_file;
 unique_file unicode_open(const char *path, const filechar_t *mode)
 {
 #ifdef _WIN32
-	std::wstring ws;
-	int len = MultiByteToWideChar(CP_UTF8, 0, path, -1, nullptr, 0);
-	if (len <= 0)
-		throw std::runtime_error{ "unicode translation error" };
-	ws.resize(len);
-
-	len = MultiByteToWideChar(CP_UTF8, 0, path, -1, &ws.front(), len);
-	if (len <= 0)
-		throw std::runtime_error{ "unicode translation error" };
-	ws.resize(len);
-
-	return unique_file{ _wfopen(ws.c_str(), mode) };
+	return unique_file{ _wfopen( std::filesystem::u8path(path).c_str(), mode) };
 #else
 	return unique_file{ std::fopen(path, mode) };
 #endif
