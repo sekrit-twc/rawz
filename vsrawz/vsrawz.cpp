@@ -142,7 +142,7 @@ class SourceFilter : public FilterBase {
 		m_prop_holder = core.new_video_frame(core.get_video_format_by_id(pfGray8), 1, 1);
 		MapRef props = m_prop_holder.frame_props_rw();
 
-		if (metadata.sarnum && metadata.sarden) {
+		if (metadata.sarnum >= 0 && metadata.sarden >= 0) {
 			auto val = normalize_rational(metadata.sarnum, metadata.sarden);
 			if (val.first > 0) {
 				props.set_prop("_SARNum", val.first);
@@ -150,7 +150,7 @@ class SourceFilter : public FilterBase {
 			}
 		}
 
-		if (metadata.fpsnum && metadata.fpsden) {
+		if (metadata.fpsnum >= 0 && metadata.fpsden >= 0) {
 			auto val = normalize_rational(metadata.fpsnum, metadata.fpsden);
 			if (val.first > 0) {
 				m_vi.fpsNum = val.first;
@@ -245,11 +245,11 @@ public:
 
 		rawz_metadata metadata{};
 		rawz_video_stream_metadata(m_stream.get(), &metadata);
-		if (metadata.fpsnum < 0 && metadata.fpsden < 0) {
+		if (metadata.fpsnum <= 0 && metadata.fpsden <= 0) {
 			metadata.fpsnum = in.get_prop<int64_t>("fpsnum", map::Ignore{});
 			metadata.fpsden = in.get_prop<int64_t>("fpsden", map::Ignore{});
 		}
-		if (metadata.sarnum < 0 && metadata.sarden < 0) {
+		if (metadata.sarnum <= 0 && metadata.sarden <= 0) {
 			metadata.sarnum = in.get_prop<int64_t>("sarnum", map::Ignore{});
 			metadata.sarden = in.get_prop<int64_t>("sarden", map::Ignore{});
 		}
