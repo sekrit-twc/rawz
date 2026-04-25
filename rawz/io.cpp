@@ -1,5 +1,5 @@
-#ifndef _WIN32
-  #define _LARGEFILE_SOURCE
+#ifdef __GNUC__
+  #define _FILE_OFFSET_BITS 64
 #endif
 
 #include <cassert>
@@ -7,6 +7,8 @@
 #include <memory>
 #include <stdexcept>
 #include <system_error>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include "io.h"
 
 #ifdef _WIN32
@@ -14,23 +16,23 @@
 
   #define WSTR(x) L##x
   #define filechar_t wchar_t
-
-  #define fdopen _fdopen
-  #define fileno _fileno
-  #define fseeko _fseeki64
-  #define fstat _fstat64
-  #define ftello _ftelli64
-  #define stat __stat64
 #else
   #include <cerrno>
-  #include <sys/types.h>
-  #include <sys/stat.h>
   #include <unistd.h>
 
   #define WSTR(x) x
   #define filechar_t char
 
   static_assert(sizeof(off_t) == sizeof(int64_t), "64-bit files required");
+#endif
+
+#ifdef _MSC_VER
+  #define fdopen _fdopen
+  #define fileno _fileno
+  #define fseeko _fseeki64
+  #define fstat _fstat64
+  #define ftello _ftelli64
+  #define stat __stat64
 #endif
 
 
