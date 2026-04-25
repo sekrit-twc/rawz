@@ -204,10 +204,10 @@ class Y4MStream : public VideoStream {
 		std::string_view val = str.substr(delim_pos + 1);
 
 		if (key == "YSCSS") {
-			constexpr int (*tolower)(int) = std::tolower;
+			auto tolower_ascii =  [](int x) { return x | 0x20; };
 
 			std::string val_lower(val.size(), '\0');
-			std::transform(val.begin(), val.end(), val_lower.begin(), tolower);
+			std::transform(val.begin(), val.end(), val_lower.begin(), tolower_ascii);
 			try {
 				decode_color_format(val_lower);
 				have_yscss_error = false;
