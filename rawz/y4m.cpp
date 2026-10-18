@@ -110,7 +110,7 @@ class Y4MStream : public VideoStream {
 			m_metadata.chromaloc = chromaloc;
 		};
 
-		if ("420jpeg") {
+		if (str == "420jpeg") {
 			set420special(CHROMA_CENTER);
 			return;
 		} else if (str == "420mpeg2") {
